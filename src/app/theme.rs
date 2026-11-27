@@ -151,21 +151,21 @@ pub fn apply_style(ctx: &egui::Context) {
         let v = &mut style.visuals;
         v.panel_fill = BG;
         v.window_fill = BG;
-        v.window_stroke = Stroke::new(1.0, BORDER);
+        v.window_stroke = Stroke::new(1.0_f32, BORDER);
         v.window_corner_radius = CornerRadius::same(10);
         v.menu_corner_radius = CornerRadius::same(8);
         v.extreme_bg_color = BG;
         v.faint_bg_color = CARD;
         v.hyperlink_color = ACCENT;
         v.selection.bg_fill = Color32::from_rgb(0xFD, 0xD9, 0xC1);
-        v.selection.stroke = Stroke::new(1.0, ACCENT);
-        v.text_cursor.stroke = Stroke::new(1.5, ACCENT);
+        v.selection.stroke = Stroke::new(1.0_f32, ACCENT);
+        v.text_cursor.stroke = Stroke::new(1.5_f32, ACCENT);
         v.override_text_color = None;
 
         let r = CornerRadius::same(6);
         let w = &mut v.widgets;
-        w.noninteractive.bg_stroke = Stroke::new(1.0, BORDER);
-        w.noninteractive.fg_stroke = Stroke::new(1.0, TEXT_2);
+        w.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER);
+        w.noninteractive.fg_stroke = Stroke::new(1.0_f32, TEXT_2);
         w.noninteractive.corner_radius = r;
         for (state, fill) in [
             (&mut w.inactive, BG),
@@ -176,12 +176,12 @@ pub fn apply_style(ctx: &egui::Context) {
             state.bg_fill = fill;
             state.weak_bg_fill = fill;
             state.corner_radius = r;
-            state.fg_stroke = Stroke::new(1.0, TEXT);
+            state.fg_stroke = Stroke::new(1.0_f32, TEXT);
             state.expansion = 0.0;
         }
-        w.inactive.bg_stroke = Stroke::new(1.0, INPUT_BORDER);
-        w.hovered.bg_stroke = Stroke::new(1.0, FAINT);
-        w.active.bg_stroke = Stroke::new(1.0, ACCENT);
-        w.open.bg_stroke = Stroke::new(1.0, FAINT);
+        w.inactive.bg_stroke = Stroke::new(1.0_f32, INPUT_BORDER);
+        w.hovered.bg_stroke = Stroke::new(1.0_f32, FAINT);
+        w.active.bg_stroke = Stroke::new(1.0_f32, ACCENT);
+        w.open.bg_stroke = Stroke::new(1.0_f32, FAINT);
     });
 }

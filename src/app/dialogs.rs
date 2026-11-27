@@ -13,7 +13,7 @@ fn dialog(title: &str) -> egui::Window<'_> {
         .frame(
             egui::Frame::window(&egui::Style::default())
                 .fill(t::BG)
-                .stroke(egui::Stroke::new(1.0, t::BORDER))
+                .stroke(egui::Stroke::new(1.0_f32, t::BORDER))
                 .corner_radius(10)
                 .inner_margin(16),
         )

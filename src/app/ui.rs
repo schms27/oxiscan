@@ -33,7 +33,7 @@ fn hline(ui: &mut Ui) {
 }
 
 fn paint_logo(p: &egui::Painter, c: Pos2, radius: f32) {
-    p.circle_stroke(c, radius - 2.0, Stroke::new(4.0, t::ACCENT));
+    p.circle_stroke(c, radius - 2.0, Stroke::new(4.0_f32, t::ACCENT));
     p.circle_filled(c, radius * 0.24, t::SKY);
 }
 
@@ -104,7 +104,7 @@ fn stop_button(ui: &mut Ui, text: &str, size: egui::Vec2, enabled: bool) -> Resp
     p.rect_stroke(
         rect,
         CornerRadius::same(8),
-        Stroke::new(1.0, t::RED_BORDER),
+        Stroke::new(1.0_f32, t::RED_BORDER),
         egui::StrokeKind::Inside,
     );
     let color = if enabled { t::RED_TEXT } else { t::FAINT };
@@ -139,7 +139,7 @@ fn segmented(ui: &mut Ui, labels: &[&str], selected: usize) -> Option<usize> {
             ui.painter().rect_stroke(
                 r,
                 CornerRadius::same(6),
-                Stroke::new(1.0, t::BORDER),
+                Stroke::new(1.0_f32, t::BORDER),
                 egui::StrokeKind::Inside,
             );
         } else if resp.hovered() && ui.is_enabled() {
@@ -1371,9 +1371,9 @@ impl ScannerApp {
         let rect = ui.max_rect();
         let c = rect.center() - vec2(0.0, 70.0);
         let p = ui.painter();
-        p.circle_stroke(c, 80.0, Stroke::new(2.0, t::CARD));
-        p.circle_stroke(c, 50.0, Stroke::new(2.0, t::DIVIDER));
-        p.circle_stroke(c, 27.5, Stroke::new(9.0, t::ACCENT));
+        p.circle_stroke(c, 80.0, Stroke::new(2.0_f32, t::CARD));
+        p.circle_stroke(c, 50.0, Stroke::new(2.0_f32, t::DIVIDER));
+        p.circle_stroke(c, 27.5, Stroke::new(9.0_f32, t::ACCENT));
         p.circle_filled(c, 6.0, t::SKY);
         p.circle_filled(c + vec2(74.0, -38.0), 4.0, t::BLUE_SOFT);
         p.circle_filled(c + vec2(-64.0, 33.0), 3.5, t::GREEN_SOFT);
@@ -1893,7 +1893,7 @@ fn local_is(local: Option<Ipv4Addr>, ip: Ipv4Addr) -> bool {
 fn paint_spinner(ui: &Ui, c: Pos2, r: f32) {
     let time = ui.input(|i| i.time) as f32;
     let p = ui.painter();
-    p.circle_stroke(c, r, Stroke::new(2.0, t::BORDER));
+    p.circle_stroke(c, r, Stroke::new(2.0_f32, t::BORDER));
     let start = time * 5.0;
     let points: Vec<Pos2> = (0..=16)
         .map(|k| {
@@ -1901,7 +1901,7 @@ fn paint_spinner(ui: &Ui, c: Pos2, r: f32) {
             c + r * vec2(a.cos(), a.sin())
         })
         .collect();
-    p.add(egui::Shape::line(points, Stroke::new(2.0, t::ACCENT)));
+    p.add(egui::Shape::line(points, Stroke::new(2.0_f32, t::ACCENT)));
 }
 
 fn paint_host_row(
