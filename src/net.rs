@@ -334,15 +334,3 @@ pub fn local_ipv4() -> Option<Ipv4Addr> {
         _ => None,
     }
 }
-
-pub fn local_hostname() -> String {
-    std::env::var("COMPUTERNAME")
-        .or_else(|_| std::env::var("HOSTNAME"))
-        .ok()
-        .or_else(|| {
-            std::fs::read_to_string("/etc/hostname")
-                .ok()
-                .map(|s| s.trim().to_string())
-        })
-        .unwrap_or_else(|| "localhost".to_string())
-}

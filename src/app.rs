@@ -1,29 +1,30 @@
-//! The main window state and logic. Drawing lives in app/ui.rs and app/dialogs.rs.
+//! The main window state and logic. Drawing lives in app/ui.rs (sidebar, results list,
+//! inspector), app/dialogs.rs (pop-ups) and app/theme.rs (colours and fonts).
 
+mod demo;
 mod dialogs;
+mod theme;
 mod ui;
 
-use crate::config::{Config, DisplayFilter, FeederKind, FeederState};
+use crate::config::{Config, DisplayFilter, FeederKind, FeederState, RecentScan};
 use crate::export::{self, cell, COLUMNS};
 use crate::net;
 use crate::opener::Opener;
-use crate::scanner::{self, Feeder, ScanHandle, ScanMsg, ScanResult, Settings};
-use eframe::egui::{self, Color32};
+use crate::scanner::{self, Feeder, ScanHandle, ScanMsg, ScanResult};
+use crate::services;
+use eframe::egui;
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-pub(crate) const COLOR_DEAD: Color32 = Color32::from_rgb(214, 60, 52);
-pub(crate) const COLOR_ALIVE: Color32 = Color32::from_rgb(52, 120, 220);
-pub(crate) const COLOR_PORTS: Color32 = Color32::from_rgb(40, 170, 70);
+pub use demo::DemoMode;
+
+const MAX_RECENT: usize = 5;
 
 struct Stats {
     seconds: f64,
-    description: String,
-    scanned: usize,
-    alive: usize,
-    with_ports: usize,
+    stopped: bool,
 }
 
 #[derive(PartialEq)]
@@ -33,9 +34,8 @@ enum GoTo {
     Ports,
 }
 
-/// Something chosen from the Commands menu or a row's right-click menu.
+/// Something chosen from a host's right-click menu or the inspector's More menu.
 enum Action {
-    Details,
     Rescan,
     Delete,
     CopyIp,
@@ -47,54 +47,59 @@ pub struct ScannerApp {
     config: Config,
     feeder: FeederState,
     list_ips: Vec<Ipv4Addr>,
+    local_ip: Option<Ipv4Addr>,
 
     results: Vec<ScanResult>,
     by_ip: HashMap<Ipv4Addr, usize>,
+    /// Indexes into `results` that pass the tab and search filters, sorted by address.
     view: Vec<usize>,
     view_dirty: bool,
     selected: HashSet<usize>,
     anchor: Option<usize>,
-    sort_col: Option<usize>,
-    sort_asc: bool,
     scroll_to: Option<usize>,
 
     scan: Option<ScanHandle>,
+    scan_full: bool,
     pending_start: bool,
     stopping: bool,
     last_desc: String,
     stats: Option<Stats>,
 
-    status: String,
+    search: String,
+    search_open: bool,
+    focus_search: bool,
+    show_advanced: bool,
+    ports_custom: bool,
+    notice: Option<(String, Instant)>,
     error: Option<String>,
-    show_prefs: bool,
-    prefs_draft: Settings,
-    prefs_tab: usize,
-    show_fetchers: bool,
-    show_stats: bool,
+    show_settings: bool,
     show_about: bool,
     show_help: bool,
-    show_find: bool,
-    find_text: String,
     show_add_fav: bool,
     fav_name: String,
-    show_manage_fav: bool,
-    details: Option<usize>,
     confirm_new_scan: bool,
 
+    /// Demo and screenshot runs never write the user's config file.
+    no_save: bool,
     screenshot: Option<PathBuf>,
     frames: u32,
     shot_requested: bool,
 }
 
 impl ScannerApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, screenshot: Option<PathBuf>) -> Self {
-        cc.egui_ctx.set_theme(egui::Theme::Light);
-        cc.egui_ctx.style_mut(|style| {
-            style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-            style.spacing.button_padding = egui::vec2(8.0, 3.0);
-        });
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        screenshot: Option<PathBuf>,
+        demo: Option<DemoMode>,
+    ) -> Self {
+        theme::install_fonts(&cc.egui_ctx);
+        theme::apply_style(&cc.egui_ctx);
 
-        let config = Config::load();
+        let config = if demo.is_some() {
+            Config::default()
+        } else {
+            Config::load()
+        };
         let feeder = config.last_feeder.clone().unwrap_or_else(default_feeder);
         let mut list_ips = Vec::new();
         if feeder.kind == FeederKind::List && !feeder.list_path.is_empty() {
@@ -102,54 +107,54 @@ impl ScannerApp {
                 list_ips = scanner::parse_ip_list(&t);
             }
         }
-        if feeder.kind != FeederKind::Range {
-            cc.egui_ctx
-                .send_viewport_cmd(egui::ViewportCommand::Title(format!(
-                    "{} - OxiScan",
-                    feeder.kind.label()
-                )));
-        }
-        let prefs_draft = config.settings.clone();
-        ScannerApp {
+        let no_save = screenshot.is_some() || demo.is_some();
+        let mut app = ScannerApp {
             config,
             feeder,
             list_ips,
+            local_ip: net::local_ipv4(),
             results: Vec::new(),
             by_ip: HashMap::new(),
             view: Vec::new(),
             view_dirty: true,
             selected: HashSet::new(),
             anchor: None,
-            sort_col: None,
-            sort_asc: true,
             scroll_to: None,
             scan: None,
+            scan_full: false,
             pending_start: false,
             stopping: false,
             last_desc: String::new(),
             stats: None,
-            status: "Ready".into(),
+            search: String::new(),
+            search_open: false,
+            focus_search: false,
+            show_advanced: false,
+            ports_custom: false,
+            notice: None,
             error: None,
-            show_prefs: false,
-            prefs_draft,
-            prefs_tab: 0,
-            show_fetchers: false,
-            show_stats: false,
+            show_settings: false,
             show_about: false,
             show_help: false,
-            show_find: false,
-            find_text: String::new(),
             show_add_fav: false,
             fav_name: String::new(),
-            show_manage_fav: false,
-            details: None,
             confirm_new_scan: false,
+            no_save,
             screenshot,
             frames: 0,
             shot_requested: false,
+        };
+        if let Some(mode) = demo {
+            app.load_demo(mode);
         }
+        app
     }
 
+    fn notify(&mut self, msg: impl Into<String>) {
+        self.notice = Some((msg.into(), Instant::now()));
+    }
+
+    /// The columns that hold data for the current settings (used by export).
     fn visible_columns(&self) -> Vec<usize> {
         let s = &self.config.settings;
         let mut v = vec![0, 1];
@@ -173,43 +178,30 @@ impl ScannerApp {
     }
 
     fn passes_filter(&self, r: &ScanResult) -> bool {
-        match self.config.display {
+        let tab = match self.config.display {
             DisplayFilter::All => true,
             DisplayFilter::Alive => r.alive,
             DisplayFilter::OpenPorts => r.has_ports(),
+        };
+        if !tab {
+            return false;
         }
+        let needle = self.search.trim().to_lowercase();
+        if needle.is_empty() {
+            return true;
+        }
+        (0..COLUMNS.len()).any(|c| cell(r, c).to_lowercase().contains(&needle))
+            || r.ports
+                .iter()
+                .any(|p| services::service_name(*p).to_lowercase().contains(&needle))
     }
 
     fn rebuild_view(&mut self) {
         let mut v: Vec<usize> = (0..self.results.len())
             .filter(|i| self.passes_filter(&self.results[*i]))
             .collect();
-        if let Some(col) = self.sort_col {
-            let res = &self.results;
-            let asc = self.sort_asc;
-            v.sort_by(|a, b| {
-                let (ra, rb) = (&res[*a], &res[*b]);
-                let o = match col {
-                    0 => u32::from(ra.ip).cmp(&u32::from(rb.ip)),
-                    1 => ra
-                        .ping_ms
-                        .unwrap_or(u32::MAX)
-                        .cmp(&rb.ping_ms.unwrap_or(u32::MAX)),
-                    2 => ra.ttl.unwrap_or(0).cmp(&rb.ttl.unwrap_or(0)),
-                    4 => rb
-                        .ports
-                        .len()
-                        .cmp(&ra.ports.len())
-                        .then(ra.ports.cmp(&rb.ports)),
-                    c => cell(ra, c).to_lowercase().cmp(&cell(rb, c).to_lowercase()),
-                };
-                if asc {
-                    o
-                } else {
-                    o.reverse()
-                }
-            });
-        }
+        let res = &self.results;
+        v.sort_by_key(|i| u32::from(res[*i].ip));
         self.view = v;
         self.view_dirty = false;
     }
@@ -222,13 +214,32 @@ impl ScannerApp {
             .collect()
     }
 
-    fn first_selected_ip(&self) -> Option<Ipv4Addr> {
-        self.selected_sorted().first().map(|i| self.results[*i].ip)
+    /// The host shown in the inspector: the last one clicked, if still selected.
+    fn focused(&self) -> Option<usize> {
+        match self.anchor {
+            Some(a) if self.selected.contains(&a) => Some(a),
+            _ => self.selected_sorted().first().copied(),
+        }
     }
 
     fn build_feeder(&mut self) -> Result<Feeder, String> {
         let f = &self.feeder;
         match f.kind {
+            FeederKind::Subnet => {
+                let text = f.cidr.trim();
+                if text.is_empty() {
+                    return Err("Enter a subnet such as 192.168.1.0/24".into());
+                }
+                if let Some((start, end)) = services::parse_cidr(text) {
+                    return Ok(Feeder::Range { start, end });
+                }
+                match net::resolve_host(text) {
+                    Some(ip) => Ok(Feeder::Range { start: ip, end: ip }),
+                    None => Err(format!(
+                        "\"{text}\" is neither a subnet, an address nor a known host name"
+                    )),
+                }
+            }
             FeederKind::Range => {
                 let start: Ipv4Addr = f
                     .start
@@ -256,7 +267,7 @@ impl ScannerApp {
                     .parse()
                     .ok()
                     .filter(|c| *c > 0)
-                    .ok_or("Count must be a positive number")?;
+                    .ok_or("The number of addresses must be a positive number")?;
                 Ok(Feeder::Random {
                     base,
                     prefix: f.random_prefix.min(32),
@@ -302,7 +313,6 @@ impl ScannerApp {
                 self.by_ip.clear();
                 self.selected.clear();
                 self.anchor = None;
-                self.details = None;
                 self.view_dirty = true;
                 self.stopping = false;
                 self.stats = None;
@@ -310,8 +320,8 @@ impl ScannerApp {
                 self.save_config();
                 let handle = scanner::start_scan(feeder, self.config.settings.clone(), ctx.clone());
                 self.last_desc = handle.description.clone();
-                self.status = "Scanning...".into();
                 self.scan = Some(handle);
+                self.scan_full = true;
             }
             Err(e) => self.error = Some(e),
         }
@@ -331,15 +341,14 @@ impl ScannerApp {
         }
         self.stopping = false;
         let handle = scanner::start_rescan(ips, self.config.settings.clone(), ctx.clone());
-        self.status = "Rescanning...".into();
         self.scan = Some(handle);
+        self.scan_full = false;
     }
 
     fn stop(&mut self) {
         if let Some(h) = &self.scan {
             h.stop.store(true, std::sync::atomic::Ordering::Relaxed);
             self.stopping = true;
-            self.status = "Stopping...".into();
         }
     }
 
@@ -363,23 +372,27 @@ impl ScannerApp {
         }
         if finished {
             let h = self.scan.take().unwrap();
-            let secs = h.started.elapsed().as_secs_f64();
-            self.stats = Some(Stats {
-                seconds: secs,
-                description: h.description.clone(),
-                scanned: self.results.len(),
-                alive: self.results.iter().filter(|r| r.alive).count(),
-                with_ports: self.results.iter().filter(|r| r.has_ports()).count(),
-            });
-            self.status = if self.stopping {
-                "Stopped".into()
+            if self.scan_full {
+                self.stats = Some(Stats {
+                    seconds: h.started.elapsed().as_secs_f64(),
+                    stopped: self.stopping,
+                });
+                let online = self.results.iter().filter(|r| r.alive).count();
+                self.config.recent.insert(
+                    0,
+                    RecentScan {
+                        at: unix_now(),
+                        target: target_text(&self.feeder),
+                        feeder: self.feeder.clone(),
+                        online,
+                    },
+                );
+                self.config.recent.truncate(MAX_RECENT);
+                self.save_config();
             } else {
-                "Ready".into()
-            };
-            self.stopping = false;
-            if self.config.settings.show_stats && self.screenshot.is_none() {
-                self.show_stats = true;
+                self.notify("Rescan finished");
             }
+            self.stopping = false;
         }
     }
 
@@ -400,12 +413,11 @@ impl ScannerApp {
             .enumerate()
             .map(|(i, r)| (r.ip, i))
             .collect();
-        self.details = None;
         self.anchor = None;
         self.view_dirty = true;
     }
 
-    fn copy_ips(&self, ctx: &egui::Context) {
+    fn copy_ips(&mut self, ctx: &egui::Context) {
         let s = self
             .selected_sorted()
             .iter()
@@ -414,6 +426,7 @@ impl ScannerApp {
             .join("\n");
         if !s.is_empty() {
             ctx.copy_text(s);
+            self.notify("Copied to the clipboard");
         }
     }
 
@@ -425,7 +438,7 @@ impl ScannerApp {
             .join("\n")
     }
 
-    fn copy_details(&self, ctx: &egui::Context) {
+    fn copy_details(&mut self, ctx: &egui::Context) {
         let s = self
             .selected_sorted()
             .iter()
@@ -434,21 +447,23 @@ impl ScannerApp {
             .join("\n\n");
         if !s.is_empty() {
             ctx.copy_text(s);
+            self.notify("Copied to the clipboard");
+        }
+    }
+
+    fn run_opener(&mut self, o: Opener) {
+        if let Err(e) = o.run() {
+            self.error = Some(format!("Could not open: {e}"));
         }
     }
 
     fn apply_action(&mut self, a: Action, ctx: &egui::Context) {
         match a {
-            Action::Details => self.details = self.selected_sorted().first().copied(),
             Action::Rescan => self.rescan_selected(ctx),
             Action::Delete => self.delete_selected(),
             Action::CopyIp => self.copy_ips(ctx),
             Action::CopyDetails => self.copy_details(ctx),
-            Action::Open(o) => {
-                if let Err(e) = o.run() {
-                    self.error = Some(format!("Could not open: {e}"));
-                }
-            }
+            Action::Open(o) => self.run_opener(o),
         }
     }
 
@@ -482,40 +497,18 @@ impl ScannerApp {
                 GoTo::Ports => r.has_ports(),
             };
             if ok {
-                self.select_one(i, pos);
+                self.select_one(i);
                 return;
             }
         }
-        self.status = "Nothing found".into();
+        self.notify("Nothing found");
     }
 
-    fn find_next(&mut self) {
-        let needle = self.find_text.trim().to_lowercase();
-        if needle.is_empty() {
-            return;
-        }
-        let cols = self.visible_columns();
-        let start_pos = self.next_pos_after_selection();
-        let n = self.view.len();
-        for k in 0..n {
-            let pos = (start_pos + k) % n;
-            let i = self.view[pos];
-            if cols
-                .iter()
-                .any(|c| cell(&self.results[i], *c).to_lowercase().contains(&needle))
-            {
-                self.select_one(i, pos);
-                return;
-            }
-        }
-        self.status = format!("\"{}\" was not found", self.find_text.trim());
-    }
-
-    fn select_one(&mut self, i: usize, pos: usize) {
+    fn select_one(&mut self, i: usize) {
         self.selected.clear();
         self.selected.insert(i);
         self.anchor = Some(i);
-        self.scroll_to = Some(pos);
+        self.scroll_to = Some(i);
     }
 
     fn export(&mut self, only_selected: bool) {
@@ -535,7 +528,7 @@ impl ScannerApp {
             .set_title(if only_selected {
                 "Export selection"
             } else {
-                "Export all"
+                "Export results"
             })
             .add_filter("Text file", &["txt"])
             .add_filter("CSV file", &["csv"])
@@ -554,7 +547,7 @@ impl ScannerApp {
         );
         let count = rows.len();
         match std::fs::write(&path, text) {
-            Ok(_) => self.status = format!("Exported {count} rows"),
+            Ok(_) => self.notify(format!("Exported {count} hosts")),
             Err(e) => self.error = Some(format!("Could not save the file: {e}")),
         }
     }
@@ -571,70 +564,34 @@ impl ScannerApp {
                     self.list_ips = scanner::parse_ip_list(&t);
                     self.feeder.kind = FeederKind::List;
                     self.feeder.list_path = p.display().to_string();
-                    self.status = format!("{} addresses loaded", self.list_ips.len());
                 }
                 Err(e) => self.error = Some(format!("Cannot read the file: {e}")),
             }
         }
     }
 
-    fn apply_netmask(&mut self, prefix: u8) {
-        let base = self
-            .feeder
-            .start
-            .trim()
-            .parse::<Ipv4Addr>()
-            .ok()
-            .or_else(net::local_ipv4);
-        if let Some(ip) = base {
-            let mask: u32 = if prefix == 0 {
-                0
-            } else {
-                u32::MAX << (32 - prefix as u32)
-            };
-            let v = u32::from(ip);
-            self.feeder.start = Ipv4Addr::from(v & mask).to_string();
-            self.feeder.end = Ipv4Addr::from(v | !mask).to_string();
-        }
-    }
-
-    fn resolve_hostname(&mut self) {
-        let name = self.feeder.hostname.trim().to_string();
-        if name.is_empty() {
-            return;
-        }
-        match net::resolve_host(&name) {
-            Some(ip) => {
-                let s = ip.to_string();
-                match self.feeder.kind {
-                    FeederKind::Random => self.feeder.random_base = s,
-                    _ => {
-                        self.feeder.kind = FeederKind::Range;
-                        self.feeder.start = s.clone();
-                        self.feeder.end = s;
-                    }
-                }
+    /// Switches the sidebar to a saved target (favorite or recent scan).
+    fn load_feeder(&mut self, f: FeederState) {
+        self.list_ips.clear();
+        if f.kind == FeederKind::List && !f.list_path.is_empty() {
+            if let Ok(t) = std::fs::read_to_string(&f.list_path) {
+                self.list_ips = scanner::parse_ip_list(&t);
             }
-            None => self.error = Some(format!("Could not resolve \"{name}\"")),
         }
+        self.feeder = f;
     }
 
-    fn feeder_summary(&self) -> String {
-        match self.feeder.kind {
-            FeederKind::Range => format!("{} - {}", self.feeder.start, self.feeder.end),
-            FeederKind::Random => format!(
-                "{} random in {}/{}",
-                self.feeder.random_count, self.feeder.random_base, self.feeder.random_prefix
-            ),
-            FeederKind::List => std::path::Path::new(&self.feeder.list_path)
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "IP list".into()),
-        }
+    /// The favorite whose target is the one currently in the sidebar.
+    fn current_favorite(&self) -> Option<usize> {
+        let t = target_text(&self.feeder);
+        self.config
+            .favorites
+            .iter()
+            .position(|f| target_text(&f.feeder) == t)
     }
 
     fn save_config(&self) {
-        if self.screenshot.is_none() {
+        if !self.no_save {
             self.config.save();
         }
     }
@@ -690,36 +647,23 @@ impl eframe::App for ScannerApp {
         if self.view_dirty {
             self.rebuild_view();
         }
+        if let Some((_, at)) = &self.notice {
+            if at.elapsed() > Duration::from_secs(4) {
+                self.notice = None;
+            } else {
+                ctx.request_repaint_after(Duration::from_millis(500));
+            }
+        }
 
-        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            self.menu_bar(ui, ctx);
-        });
-        egui::TopBottomPanel::top("toolbar")
-            .frame(
-                egui::Frame::side_top_panel(&ctx.style())
-                    .inner_margin(egui::Margin::symmetric(8, 2)),
-            )
-            .show(ctx, |ui| {
-                self.toolbar(ui, ctx);
-            });
-        egui::TopBottomPanel::bottom("status")
-            .exact_height(26.0)
-            .show(ctx, |ui| {
-                self.status_bar(ui);
-            });
-        egui::CentralPanel::default()
-            .frame(
-                egui::Frame::central_panel(&ctx.style())
-                    .inner_margin(egui::Margin::same(2))
-                    .fill(Color32::WHITE),
-            )
-            .show(ctx, |ui| {
-                self.table(ui, ctx);
-            });
+        let settings_before = self.config.settings.clone();
+        self.draw(ctx);
         self.dialogs(ctx);
+        if !same_settings(&settings_before, &self.config.settings) {
+            self.save_config();
+        }
 
         if self.scan.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(150));
+            ctx.request_repaint_after(Duration::from_millis(100));
         }
         self.handle_screenshot(ctx);
     }
@@ -728,10 +672,39 @@ impl eframe::App for ScannerApp {
         if let Some(h) = &self.scan {
             h.stop.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-        if self.screenshot.is_none() {
+        if !self.no_save {
             self.config.last_feeder = Some(self.feeder.clone());
             self.config.save();
         }
+    }
+}
+
+fn same_settings(a: &scanner::Settings, b: &scanner::Settings) -> bool {
+    serde_json::to_string(a).ok() == serde_json::to_string(b).ok()
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// A short description of what a feeder will scan, e.g. "192.168.1.0/24".
+pub(crate) fn target_text(f: &FeederState) -> String {
+    match f.kind {
+        FeederKind::Subnet => f.cidr.trim().to_string(),
+        FeederKind::Range => format!("{} – {}", f.start.trim(), f.end.trim()),
+        FeederKind::Random => format!(
+            "{} random in {}/{}",
+            f.random_count.trim(),
+            f.random_base.trim(),
+            f.random_prefix
+        ),
+        FeederKind::List => std::path::Path::new(&f.list_path)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "IP list".into()),
     }
 }
 
@@ -739,10 +712,11 @@ fn default_feeder() -> FeederState {
     let ip = net::local_ipv4().unwrap_or(Ipv4Addr::new(192, 168, 1, 1));
     let o = ip.octets();
     FeederState {
-        kind: FeederKind::Range,
+        kind: FeederKind::Subnet,
+        cidr: format!("{}.{}.{}.0/24", o[0], o[1], o[2]),
         start: format!("{}.{}.{}.0", o[0], o[1], o[2]),
         end: format!("{}.{}.{}.255", o[0], o[1], o[2]),
-        hostname: net::local_hostname(),
+        hostname: String::new(),
         random_base: ip.to_string(),
         random_prefix: 24,
         random_count: "100".into(),

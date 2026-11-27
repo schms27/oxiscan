@@ -1,22 +1,30 @@
-//! Pop-up windows: problems, confirm, preferences, fetchers, statistics, details, find,
-//! favorites, help and about.
+//! Pop-up windows: problems, confirm a new scan, save a favorite, settings, help and about.
 
-use super::{ScannerApp, COLOR_DEAD};
+use super::theme::{self as t, regular, semibold};
+use super::{target_text, ScannerApp};
 use crate::config::Favorite;
-use crate::export::{cell, COLUMNS};
-use crate::scanner::{self, PingMethod};
-use eframe::egui::{self, Color32, Key, RichText};
+use eframe::egui::{self, Align2, Key, RichText};
+
+fn dialog(title: &str) -> egui::Window<'_> {
+    egui::Window::new(RichText::new(title).font(semibold(14.0)).color(t::TEXT))
+        .collapsible(false)
+        .resizable(false)
+        .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
+        .frame(
+            egui::Frame::window(&egui::Style::default())
+                .fill(t::BG)
+                .stroke(egui::Stroke::new(1.0, t::BORDER))
+                .corner_radius(10)
+                .inner_margin(16),
+        )
+}
 
 impl ScannerApp {
     pub(super) fn dialogs(&mut self, ctx: &egui::Context) {
         self.problem_dialog(ctx);
         self.confirm_dialog(ctx);
-        self.prefs_dialog(ctx);
-        self.fetchers_dialog(ctx);
-        self.stats_dialog(ctx);
-        self.details_dialog(ctx);
-        self.find_dialog(ctx);
-        self.favorites_dialogs(ctx);
+        self.favorite_dialog(ctx);
+        self.settings_dialog(ctx);
         self.info_dialogs(ctx);
     }
 
@@ -25,17 +33,14 @@ impl ScannerApp {
             return;
         };
         let mut close = false;
-        egui::Window::new("Problem")
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
-                ui.label(msg);
-                ui.add_space(6.0);
-                if ui.button("OK").clicked() {
-                    close = true;
-                }
-            });
+        dialog("Something went wrong").show(ctx, |ui| {
+            ui.set_max_width(360.0);
+            ui.label(RichText::new(msg).color(t::TEXT_2));
+            ui.add_space(8.0);
+            if ui.button("OK").clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
+                close = true;
+            }
+        });
         if close {
             self.error = None;
         }
@@ -46,22 +51,18 @@ impl ScannerApp {
             return;
         }
         let mut answer = None;
-        egui::Window::new("Start a new scan?")
-            .collapsible(false)
-            .resizable(false)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
-                ui.label("The current results will be cleared.");
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if ui.button("Start").clicked() {
-                        answer = Some(true);
-                    }
-                    if ui.button("Cancel").clicked() {
-                        answer = Some(false);
-                    }
-                });
+        dialog("Start a new scan?").show(ctx, |ui| {
+            ui.label(RichText::new("The current results will be cleared.").color(t::TEXT_2));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Start scan").clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
+                    answer = Some(true);
+                }
+                if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                    answer = Some(false);
+                }
             });
+        });
         if let Some(a) = answer {
             self.confirm_new_scan = false;
             if a {
@@ -70,391 +71,140 @@ impl ScannerApp {
         }
     }
 
-    fn prefs_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_prefs {
+    fn favorite_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_add_fav {
             return;
         }
-        let mut open = true;
-        let mut apply = false;
+        let mut save = false;
         let mut cancel = false;
-        let tab = &mut self.prefs_tab;
-        let d = &mut self.prefs_draft;
-        egui::Window::new("Preferences")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(420.0)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    for (i, t) in ["Scanning", "Ports", "Display"].iter().enumerate() {
-                        ui.selectable_value(tab, i, *t);
-                    }
-                });
-                ui.separator();
-                match *tab {
-                    0 => {
-                        egui::Grid::new("prefs_scan")
-                            .num_columns(2)
-                            .spacing([12.0, 6.0])
-                            .show(ui, |ui| {
-                                ui.label("Max. threads:");
-                                ui.add(egui::DragValue::new(&mut d.max_threads).range(1..=1000));
-                                ui.end_row();
-                                ui.label("Delay between starting threads (ms):");
-                                ui.add(
-                                    egui::DragValue::new(&mut d.thread_delay_ms).range(0..=5000),
-                                );
-                                ui.end_row();
-                                ui.label("Pinging method:");
-                                egui::ComboBox::from_id_salt("ping_method")
-                                    .selected_text(d.ping_method.label())
-                                    .show_ui(ui, |ui| {
-                                        for m in [
-                                            PingMethod::Icmp,
-                                            PingMethod::Tcp,
-                                            PingMethod::Combined,
-                                        ] {
-                                            ui.selectable_value(&mut d.ping_method, m, m.label());
-                                        }
-                                    });
-                                ui.end_row();
-                                ui.label("Number of ping probes:");
-                                ui.add(egui::DragValue::new(&mut d.ping_count).range(1..=10));
-                                ui.end_row();
-                                ui.label("Ping timeout (ms):");
-                                ui.add(
-                                    egui::DragValue::new(&mut d.ping_timeout_ms).range(50..=30000),
-                                );
-                                ui.end_row();
-                            });
-                        ui.add_space(4.0);
-                        ui.checkbox(
-                            &mut d.scan_dead_hosts,
-                            "Scan dead hosts, which don't reply to pings",
-                        );
-                        ui.checkbox(
-                            &mut d.skip_broadcast,
-                            "Skip likely broadcast addresses (.0 and .255)",
-                        );
-                    }
-                    1 => {
-                        ui.label("Ports to scan (e.g. 1-1024,3389,8080):");
-                        ui.add(
-                            egui::TextEdit::multiline(&mut d.ports)
-                                .desired_rows(2)
-                                .desired_width(380.0),
-                        );
-                        match scanner::parse_ports(&d.ports) {
-                            Ok(v) => ui.label(
-                                RichText::new(format!("{} ports", v.len()))
-                                    .color(Color32::from_gray(110)),
-                            ),
-                            Err(e) => ui.label(RichText::new(e).color(COLOR_DEAD)),
-                        };
-                        ui.add_space(4.0);
-                        egui::Grid::new("prefs_ports")
-                            .num_columns(2)
-                            .spacing([12.0, 6.0])
-                            .show(ui, |ui| {
-                                ui.label("Port connect timeout (ms):");
-                                ui.add(
-                                    egui::DragValue::new(&mut d.port_timeout_ms).range(50..=30000),
-                                );
-                                ui.end_row();
-                            });
-                        ui.checkbox(
-                            &mut d.adapt_port_timeout,
-                            "Adapt timeout to the host's ping time",
-                        );
-                    }
-                    _ => {
-                        ui.checkbox(&mut d.show_stats, "Show statistics when a scan finishes");
-                        ui.checkbox(
-                            &mut d.ask_confirm_new_scan,
-                            "Ask before clearing results for a new scan",
-                        );
-                    }
+        let target = target_text(&self.feeder);
+        dialog("Save as favorite").show(ctx, |ui| {
+            ui.label(
+                RichText::new(format!("Target: {target}"))
+                    .font(regular(12.0))
+                    .color(t::MUTED),
+            );
+            ui.add_space(4.0);
+            let edit = ui.add(
+                egui::TextEdit::singleline(&mut self.fav_name)
+                    .hint_text("Name, e.g. Home network")
+                    .desired_width(280.0)
+                    .margin(egui::Margin::symmetric(10, 7)),
+            );
+            edit.request_focus();
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Save").clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
+                    save = true;
                 }
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if ui.button("OK").clicked() {
-                        apply = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        cancel = true;
-                    }
-                });
+                if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                    cancel = true;
+                }
             });
-        if apply {
-            if let Err(e) = scanner::parse_ports(&self.prefs_draft.ports) {
-                self.error = Some(format!("Port list: {e}"));
-            } else {
-                self.config.settings = self.prefs_draft.clone();
-                self.save_config();
-                self.show_prefs = false;
+        });
+        if save && !self.fav_name.trim().is_empty() {
+            let fav = Favorite {
+                name: self.fav_name.trim().to_string(),
+                feeder: self.feeder.clone(),
+            };
+            match self.current_favorite() {
+                Some(i) => self.config.favorites[i] = fav,
+                None => self.config.favorites.push(fav),
             }
-        } else if cancel || !open {
-            self.show_prefs = false;
-        }
-    }
-
-    fn fetchers_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_fetchers {
-            return;
-        }
-        let mut open = true;
-        let before = format!("{:?}", self.config.settings);
-        let s = &mut self.config.settings;
-        egui::Window::new("Fetchers")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.label("Choose what to find out about each host:");
-                ui.add_space(4.0);
-                ui.add_enabled(
-                    false,
-                    egui::Checkbox::new(&mut true, "IP and Ping (always)"),
-                );
-                ui.add_enabled(
-                    false,
-                    egui::Checkbox::new(&mut true, "Ports (set the list in Preferences)"),
-                );
-                ui.checkbox(&mut s.fetch_hostname, "Hostname");
-                ui.checkbox(&mut s.fetch_ttl, "TTL");
-                ui.checkbox(&mut s.fetch_mac, "MAC Address (local network only)");
-                ui.checkbox(&mut s.fetch_netbios, "NetBIOS Info");
-                ui.checkbox(&mut s.fetch_web, "Web detect (server on port 80)");
-                ui.add_space(4.0);
-                ui.label(
-                    RichText::new("Changes apply to the next scan.").color(Color32::from_gray(110)),
-                );
-            });
-        if before != format!("{:?}", self.config.settings) {
             self.save_config();
-        }
-        if !open {
-            self.show_fetchers = false;
+            self.show_add_fav = false;
+        } else if cancel {
+            self.show_add_fav = false;
         }
     }
 
-    fn stats_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_stats {
+    fn settings_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_settings {
             return;
         }
-        let mut open = true;
-        if let Some(s) = &self.stats {
-            egui::Window::new("Scan statistics")
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    egui::Grid::new("stats")
-                        .num_columns(2)
-                        .spacing([16.0, 4.0])
-                        .show(ui, |ui| {
-                            let avg = if s.scanned > 0 {
-                                s.seconds / s.scanned as f64
-                            } else {
-                                0.0
-                            };
-                            let rows = [
-                                ("Total time:", format!("{:.2} sec", s.seconds)),
-                                ("Average time per host:", format!("{avg:.3} sec")),
-                                ("Scanned:", s.description.clone()),
-                                ("Hosts scanned:", s.scanned.to_string()),
-                                ("Hosts alive:", s.alive.to_string()),
-                                ("With open ports:", s.with_ports.to_string()),
-                            ];
-                            for (k, v) in rows {
-                                ui.label(k);
-                                ui.label(v);
-                                ui.end_row();
-                            }
-                        });
+        let mut close = false;
+        let s = &mut self.config.settings;
+        dialog("Settings").show(ctx, |ui| {
+            ui.label(
+                RichText::new("Scan options are in the sidebar under Advanced options.")
+                    .font(regular(12.0))
+                    .color(t::MUTED),
+            );
+            ui.add_space(8.0);
+            egui::Grid::new("settings_grid")
+                .num_columns(2)
+                .spacing([16.0, 8.0])
+                .show(ui, |ui| {
+                    ui.label("Delay between starting threads");
+                    ui.add(
+                        egui::DragValue::new(&mut s.thread_delay_ms)
+                            .range(0..=5000)
+                            .suffix(" ms"),
+                    );
+                    ui.end_row();
+                    ui.label("Ping probes per host");
+                    ui.add(egui::DragValue::new(&mut s.ping_count).range(1..=10));
+                    ui.end_row();
                 });
-        }
-        if !open || self.stats.is_none() {
-            self.show_stats = false;
-        }
-    }
-
-    fn details_dialog(&mut self, ctx: &egui::Context) {
-        let Some(idx) = self.details else { return };
-        if idx >= self.results.len() {
-            self.details = None;
-            return;
-        }
-        let mut open = true;
-        let text = self.details_text(idx);
-        let r = &self.results[idx];
-        egui::Window::new("IP details")
-            .id(egui::Id::new("details_window"))
-            .open(&mut open)
-            .collapsible(false)
-            .default_width(340.0)
-            .show(ctx, |ui| {
-                ui.label(RichText::new(r.ip.to_string()).strong().size(16.0));
-                ui.separator();
-                egui::Grid::new("details_grid")
-                    .num_columns(2)
-                    .spacing([14.0, 4.0])
-                    .show(ui, |ui| {
-                        ui.label("Status:");
-                        ui.label(if r.has_ports() {
-                            "Alive, with open ports"
-                        } else if r.alive {
-                            "Alive"
-                        } else {
-                            "Dead (no reply)"
-                        });
-                        ui.end_row();
-                        for (c, name) in COLUMNS.iter().enumerate().skip(1) {
-                            ui.label(format!("{name}:"));
-                            ui.add(egui::Label::new(cell(r, c)).wrap());
-                            ui.end_row();
-                        }
-                    });
-                ui.add_space(6.0);
-                if ui.button("Copy to clipboard").clicked() {
-                    ctx.copy_text(text.clone());
-                }
-            });
-        if !open {
-            self.details = None;
-        }
-    }
-
-    fn find_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_find {
-            return;
-        }
-        let mut open = true;
-        let mut go = false;
-        egui::Window::new("Find")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let r = ui
-                        .add(egui::TextEdit::singleline(&mut self.find_text).desired_width(200.0));
-                    if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                        go = true;
-                        r.request_focus();
-                    }
-                    if ui.button("Find next").clicked() {
-                        go = true;
-                    }
-                });
-            });
-        if go {
-            self.find_next();
-        }
-        if !open {
-            self.show_find = false;
-        }
-    }
-
-    fn favorites_dialogs(&mut self, ctx: &egui::Context) {
-        if self.show_add_fav {
-            let mut open = true;
-            let mut add = false;
-            egui::Window::new("Add to favorites")
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    ui.label("Name:");
-                    ui.add(egui::TextEdit::singleline(&mut self.fav_name).desired_width(240.0));
-                    if ui.button("Add").clicked() {
-                        add = true;
-                    }
-                });
-            if add && !self.fav_name.trim().is_empty() {
-                self.config.favorites.push(Favorite {
-                    name: self.fav_name.trim().to_string(),
-                    feeder: self.feeder.clone(),
-                });
-                self.save_config();
-                self.show_add_fav = false;
-            } else if !open {
-                self.show_add_fav = false;
+            ui.add_space(4.0);
+            ui.checkbox(
+                &mut s.ask_confirm_new_scan,
+                "Ask before clearing results for a new scan",
+            );
+            ui.add_space(8.0);
+            if ui.button("Done").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                close = true;
             }
-        }
-
-        if self.show_manage_fav {
-            let mut open = true;
-            let mut remove = None;
-            let mut up = None;
-            egui::Window::new("Manage favorites")
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    if self.config.favorites.is_empty() {
-                        ui.label("No favorites yet. Use Favorites → Add current.");
-                    }
-                    for (i, f) in self.config.favorites.iter_mut().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut f.name).desired_width(200.0));
-                            if ui.small_button("⏶").on_hover_text("Move up").clicked() && i > 0 {
-                                up = Some(i);
-                            }
-                            if ui.small_button("✖").on_hover_text("Delete").clicked() {
-                                remove = Some(i);
-                            }
-                        });
-                    }
-                });
-            if let Some(i) = remove {
-                self.config.favorites.remove(i);
-            }
-            if let Some(i) = up {
-                self.config.favorites.swap(i, i - 1);
-            }
-            if !open {
-                self.show_manage_fav = false;
-                self.save_config();
-            }
+        });
+        if close {
+            self.show_settings = false;
         }
     }
 
     fn info_dialogs(&mut self, ctx: &egui::Context) {
         if self.show_help {
-            let mut open = true;
-            egui::Window::new("Getting started")
-                .open(&mut open)
-                .collapsible(false)
-                .default_width(440.0)
-                .show(ctx, |ui| {
-                    ui.label("1. Enter a range of addresses (or pick a netmask to fill it in from the start address), choose Random, or load a list from a text file.");
-                    ui.label("2. Press Start. Each address is pinged; hosts that answer are checked further: name, open ports and whatever else is turned on under Tools → Fetchers.");
-                    ui.label("3. Colours: red = no reply, blue = alive, green = alive with open ports.");
-                    ui.label("4. Right-click a row (or use the Commands menu) to see details, copy, rescan, delete or open the host in a browser, ping or remote desktop.");
-                    ui.label("5. Save results from Scan → Export as text, CSV, XML or an IP:Port list.");
-                    ui.add_space(4.0);
-                    ui.label(RichText::new("Tip: set the ports to scan under Tools → Preferences → Ports.").italics());
-                });
-            if !open {
+            let mut close = false;
+            dialog("Getting started").show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                for line in [
+                    "1. On the left, choose what to scan: a subnet such as 192.168.1.0/24, a range of addresses, random addresses or a list from a text file. Pick which ports to check.",
+                    "2. Press Start scan (or Ctrl+Enter). Hosts appear in the middle as they answer, grouped into those with open ports and those without.",
+                    "3. Click a host to see its details and services on the right. Web interfaces, file shares, SSH and Remote Desktop open with one click.",
+                    "4. Right-click hosts to copy, rescan or remove them. Ctrl+F filters the list, Export saves it as text, CSV, XML or an IP:Port list.",
+                    "5. Save targets you scan often as favorites. Recent scans are listed at the bottom of the sidebar.",
+                ] {
+                    ui.label(RichText::new(line).color(t::TEXT_2));
+                }
+                ui.add_space(8.0);
+                if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                    close = true;
+                }
+            });
+            if close {
                 self.show_help = false;
             }
         }
 
         if self.show_about {
-            let mut open = true;
-            egui::Window::new("About")
-                .open(&mut open)
-                .collapsible(false)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    ui.heading("OxiScan");
-                    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                    ui.add_space(4.0);
-                    ui.label("A fast network scanner for IP addresses and ports.");
-                    ui.label("Native app written in Rust: no external dependencies.");
-                });
-            if !open {
+            let mut close = false;
+            dialog("About OxiScan").show(ctx, |ui| {
+                ui.label(RichText::new("OxiScan").font(semibold(18.0)).color(t::TEXT));
+                ui.label(
+                    RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION"))).color(t::MUTED),
+                );
+                ui.add_space(6.0);
+                ui.label("A fast network scanner for IP addresses and ports.");
+                ui.label("Native app written in Rust: no external dependencies.");
+                ui.hyperlink_to(
+                    "github.com/schms27/oxiscan",
+                    "https://github.com/schms27/oxiscan",
+                );
+                ui.add_space(8.0);
+                if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                    close = true;
+                }
+            });
+            if close {
                 self.show_about = false;
             }
         }

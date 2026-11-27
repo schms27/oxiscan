@@ -15,16 +15,6 @@ pub enum PingMethod {
     Combined,
 }
 
-impl PingMethod {
-    pub fn label(&self) -> &'static str {
-        match self {
-            PingMethod::Icmp => "ICMP echo",
-            PingMethod::Tcp => "TCP port probe",
-            PingMethod::Combined => "Combined (ICMP, then TCP)",
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -57,7 +47,7 @@ impl Default for Settings {
             ping_timeout_ms: 2000,
             scan_dead_hosts: false,
             skip_broadcast: true,
-            ports: "80,443,8080".to_string(),
+            ports: crate::services::PRESETS[1].1.to_string(),
             port_timeout_ms: 2000,
             adapt_port_timeout: true,
             fetch_hostname: true,

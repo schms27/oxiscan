@@ -7,43 +7,26 @@ use std::path::PathBuf;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FeederKind {
     #[default]
+    Subnet,
     Range,
     Random,
     List,
 }
 
-impl FeederKind {
-    pub fn label(&self) -> &'static str {
-        match self {
-            FeederKind::Range => "IP Range",
-            FeederKind::Random => "Random",
-            FeederKind::List => "IP List File",
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum DisplayFilter {
-    #[default]
     All,
+    #[default]
     Alive,
     OpenPorts,
-}
-
-impl DisplayFilter {
-    pub fn label(&self) -> &'static str {
-        match self {
-            DisplayFilter::All => "All",
-            DisplayFilter::Alive => "Alive only",
-            DisplayFilter::OpenPorts => "Open ports",
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct FeederState {
     pub kind: FeederKind,
+    /// Subnet mode: "192.168.1.0/24", a single address or a host name.
+    pub cidr: String,
     pub start: String,
     pub end: String,
     pub hostname: String,
@@ -59,6 +42,16 @@ pub struct Favorite {
     pub feeder: FeederState,
 }
 
+/// One finished scan, shown under "Recent scans".
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RecentScan {
+    /// Unix time in seconds when the scan finished.
+    pub at: u64,
+    pub target: String,
+    pub feeder: FeederState,
+    pub online: usize,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Config {
@@ -66,6 +59,7 @@ pub struct Config {
     pub favorites: Vec<Favorite>,
     pub display: DisplayFilter,
     pub last_feeder: Option<FeederState>,
+    pub recent: Vec<RecentScan>,
 }
 
 fn path() -> Option<PathBuf> {
