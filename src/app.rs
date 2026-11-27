@@ -6,7 +6,10 @@ mod dialogs;
 mod theme;
 mod ui;
 
-use crate::config::{Config, DisplayFilter, FeederKind, FeederState, RecentScan, ThemePref};
+pub(crate) use crate::config::target_text;
+use crate::config::{
+    default_feeder, Config, DisplayFilter, FeederKind, FeederState, RecentScan, ThemePref,
+};
 use crate::export::{self, cell, COLUMNS};
 use crate::net;
 use crate::opener::Opener;
@@ -230,72 +233,7 @@ impl ScannerApp {
     }
 
     fn build_feeder(&mut self) -> Result<Feeder, String> {
-        let f = &self.feeder;
-        match f.kind {
-            FeederKind::Subnet => {
-                let text = f.cidr.trim();
-                if text.is_empty() {
-                    return Err("Enter a subnet such as 192.168.1.0/24".into());
-                }
-                if let Some((start, end)) = services::parse_cidr(text) {
-                    return Ok(Feeder::Range { start, end });
-                }
-                match net::resolve_host(text) {
-                    Some(ip) => Ok(Feeder::Range { start: ip, end: ip }),
-                    None => Err(format!(
-                        "\"{text}\" is neither a subnet, an address nor a known host name"
-                    )),
-                }
-            }
-            FeederKind::Range => {
-                let start: Ipv4Addr = f
-                    .start
-                    .trim()
-                    .parse()
-                    .map_err(|_| format!("\"{}\" is not a valid start address", f.start))?;
-                let end: Ipv4Addr = f
-                    .end
-                    .trim()
-                    .parse()
-                    .map_err(|_| format!("\"{}\" is not a valid end address", f.end))?;
-                if u32::from(start) > u32::from(end) {
-                    return Err("The start address must not be greater than the end address".into());
-                }
-                Ok(Feeder::Range { start, end })
-            }
-            FeederKind::Random => {
-                let base: Ipv4Addr =
-                    f.random_base.trim().parse().map_err(|_| {
-                        format!("\"{}\" is not a valid base address", f.random_base)
-                    })?;
-                let count: u32 = f
-                    .random_count
-                    .trim()
-                    .parse()
-                    .ok()
-                    .filter(|c| *c > 0)
-                    .ok_or("The number of addresses must be a positive number")?;
-                Ok(Feeder::Random {
-                    base,
-                    prefix: f.random_prefix.min(32),
-                    count,
-                })
-            }
-            FeederKind::List => {
-                if self.list_ips.is_empty() {
-                    if f.list_path.is_empty() {
-                        return Err("Choose a file with IP addresses first".into());
-                    }
-                    let text = std::fs::read_to_string(&f.list_path)
-                        .map_err(|e| format!("Cannot read {}: {}", f.list_path, e))?;
-                    self.list_ips = scanner::parse_ip_list(&text);
-                }
-                if self.list_ips.is_empty() {
-                    return Err("No IP addresses were found in the file".into());
-                }
-                Ok(Feeder::List(self.list_ips.clone()))
-            }
-        }
+        self.feeder.to_feeder(&mut self.list_ips)
     }
 
     fn request_start(&mut self) {
@@ -325,7 +263,8 @@ impl ScannerApp {
                 self.stats = None;
                 self.config.last_feeder = Some(self.feeder.clone());
                 self.save_config();
-                let handle = scanner::start_scan(feeder, self.config.settings.clone(), ctx.clone());
+                let handle =
+                    scanner::start_scan(feeder, self.config.settings.clone(), repaint(ctx));
                 self.last_desc = handle.description.clone();
                 self.scan = Some(handle);
                 self.scan_full = true;
@@ -347,7 +286,7 @@ impl ScannerApp {
             return;
         }
         self.stopping = false;
-        let handle = scanner::start_rescan(ips, self.config.settings.clone(), ctx.clone());
+        let handle = scanner::start_rescan(ips, self.config.settings.clone(), repaint(ctx));
         self.scan = Some(handle);
         self.scan_full = false;
     }
@@ -705,38 +644,9 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
-/// A short description of what a feeder will scan, e.g. "192.168.1.0/24".
-pub(crate) fn target_text(f: &FeederState) -> String {
-    match f.kind {
-        FeederKind::Subnet => f.cidr.trim().to_string(),
-        FeederKind::Range => format!("{} – {}", f.start.trim(), f.end.trim()),
-        FeederKind::Random => format!(
-            "{} random in {}/{}",
-            f.random_count.trim(),
-            f.random_base.trim(),
-            f.random_prefix
-        ),
-        FeederKind::List => std::path::Path::new(&f.list_path)
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "IP list".into()),
-    }
-}
-
-fn default_feeder() -> FeederState {
-    let ip = net::local_ipv4().unwrap_or(Ipv4Addr::new(192, 168, 1, 1));
-    let o = ip.octets();
-    FeederState {
-        kind: FeederKind::Subnet,
-        cidr: format!("{}.{}.{}.0/24", o[0], o[1], o[2]),
-        start: format!("{}.{}.{}.0", o[0], o[1], o[2]),
-        end: format!("{}.{}.{}.255", o[0], o[1], o[2]),
-        hostname: String::new(),
-        random_base: ip.to_string(),
-        random_prefix: 24,
-        random_count: "100".into(),
-        list_path: String::new(),
-    }
+fn repaint(ctx: &egui::Context) -> scanner::Notify {
+    let ctx = ctx.clone();
+    std::sync::Arc::new(move || ctx.request_repaint())
 }
 
 fn egui_theme(t: ThemePref) -> egui::ThemePreference {

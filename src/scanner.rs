@@ -194,6 +194,79 @@ pub fn parse_ip_list(text: &str) -> Vec<Ipv4Addr> {
     out
 }
 
+/// Parses a free-form target: a subnet ("192.168.1.0/24"), a single address, a range
+/// ("10.0.0.1-10.0.0.50" or "10.0.0.1-50"), several of these separated by commas or
+/// spaces, or a host name.
+pub fn parse_target(text: &str) -> Result<Feeder, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Err("Enter a subnet such as 192.168.1.0/24".into());
+    }
+    // "10.0.0.1 - 10.0.0.9" is one range, not three parts.
+    let text = text.split('-').map(str::trim).collect::<Vec<_>>().join("-");
+    let parts: Vec<&str> = text
+        .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+        .filter(|p| !p.is_empty())
+        .collect();
+    let mut ranges = Vec::new();
+    for part in &parts {
+        ranges.push(parse_target_part(part)?);
+    }
+    if let [(start, end)] = ranges[..] {
+        return Ok(Feeder::Range { start, end });
+    }
+    let total: u64 = ranges
+        .iter()
+        .map(|(a, b)| crate::services::range_len(*a, *b))
+        .sum();
+    if total > MAX_LIST_TARGET {
+        return Err(format!(
+            "That is {total} addresses; give one subnet or range for scans this large"
+        ));
+    }
+    let mut ips: Vec<Ipv4Addr> = ranges
+        .into_iter()
+        .flat_map(|(a, b)| (u32::from(a)..=u32::from(b)).map(Ipv4Addr::from))
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    ips.retain(|ip| seen.insert(*ip));
+    Ok(Feeder::List(ips))
+}
+
+/// Several targets are expanded into a list, so they are capped well below a /8.
+const MAX_LIST_TARGET: u64 = 1 << 20;
+
+fn parse_target_part(part: &str) -> Result<(Ipv4Addr, Ipv4Addr), String> {
+    if let Some(r) = crate::services::parse_cidr(part) {
+        return Ok(r);
+    }
+    if let Some((a, b)) = part.split_once('-') {
+        if let Ok(start) = a.trim().parse::<Ipv4Addr>() {
+            let b = b.trim();
+            let end = match b.parse::<Ipv4Addr>() {
+                Ok(end) => Some(end),
+                Err(_) => b.parse::<u8>().ok().map(|last| {
+                    let o = start.octets();
+                    Ipv4Addr::new(o[0], o[1], o[2], last)
+                }),
+            };
+            return match end {
+                Some(end) if u32::from(start) <= u32::from(end) => Ok((start, end)),
+                Some(_) => Err(format!(
+                    "In \"{part}\" the start address is greater than the end"
+                )),
+                None => Err(format!("\"{b}\" is not a valid end address")),
+            };
+        }
+    }
+    match crate::net::resolve_host(part) {
+        Some(ip) => Ok((ip, ip)),
+        None => Err(format!(
+            "\"{part}\" is neither a subnet, an address, a range nor a known host name"
+        )),
+    }
+}
+
 // ---------------------------------------------------------------- Results
 
 #[derive(Clone, Debug)]
@@ -266,7 +339,10 @@ fn is_broadcast_like(ip: Ipv4Addr) -> bool {
     last == 0 || last == 255
 }
 
-pub fn start_scan(feeder: Feeder, settings: Settings, ctx: eframe::egui::Context) -> ScanHandle {
+/// Called from worker threads whenever a host has been scanned (the GUI repaints).
+pub type Notify = Arc<dyn Fn() + Send + Sync>;
+
+pub fn start_scan(feeder: Feeder, settings: Settings, notify: Notify) -> ScanHandle {
     let (tx, rx) = channel();
     let stop = Arc::new(AtomicBool::new(false));
     let done = Arc::new(AtomicU64::new(0));
@@ -296,7 +372,7 @@ pub fn start_scan(feeder: Feeder, settings: Settings, ctx: eframe::egui::Context
                 let current = current.clone();
                 let settings = settings.clone();
                 let ports = ports.clone();
-                let ctx = ctx.clone();
+                let notify = notify.clone();
                 // Stagger thread start-up so the network isn't flooded at once.
                 if settings.thread_delay_ms > 0 && i > 0 {
                     std::thread::sleep(Duration::from_millis(settings.thread_delay_ms));
@@ -320,14 +396,14 @@ pub fn start_scan(feeder: Feeder, settings: Settings, ctx: eframe::egui::Context
                     active.fetch_sub(1, Ordering::Relaxed);
                     done.fetch_add(1, Ordering::Relaxed);
                     let _ = tx.send(ScanMsg::Result(r));
-                    ctx.request_repaint();
+                    notify();
                 }));
             }
             for w in workers {
                 let _ = w.join();
             }
             let _ = tx.send(ScanMsg::Finished);
-            ctx.request_repaint();
+            notify();
         });
     }
 
@@ -448,14 +524,10 @@ fn scan_ports(ip: Ipv4Addr, ports: &[u16], timeout: Duration, stop: &AtomicBool)
 }
 
 /// Re-scans a list of single hosts (used by "Rescan selected").
-pub fn start_rescan(
-    ips: Vec<Ipv4Addr>,
-    settings: Settings,
-    ctx: eframe::egui::Context,
-) -> ScanHandle {
+pub fn start_rescan(ips: Vec<Ipv4Addr>, settings: Settings, notify: Notify) -> ScanHandle {
     let mut s = settings;
     s.skip_broadcast = false;
-    start_scan(Feeder::List(ips), s, ctx)
+    start_scan(Feeder::List(ips), s, notify)
 }
 
 #[cfg(test)]
@@ -487,6 +559,30 @@ mod tests {
         };
         assert!(r.into_iter().all(|ip| ip.octets()[..3] == [192, 168, 5]));
         assert_eq!(parse_ip_list("a 1.2.3.4\nx,5.6.7.8;bad 999.1.1.1").len(), 2);
+    }
+
+    #[test]
+    fn targets() {
+        let ip = |s: &str| s.parse::<Ipv4Addr>().unwrap();
+        let range = |s: &str| match parse_target(s).unwrap() {
+            Feeder::Range { start, end } => (start, end),
+            f => panic!("{s}: {f:?}"),
+        };
+        assert_eq!(
+            range("192.168.1.9/24"),
+            (ip("192.168.1.0"), ip("192.168.1.255"))
+        );
+        assert_eq!(range("10.0.0.5-20"), (ip("10.0.0.5"), ip("10.0.0.20")));
+        assert_eq!(
+            range("10.0.0.5 - 10.0.1.2"),
+            (ip("10.0.0.5"), ip("10.0.1.2"))
+        );
+        match parse_target("10.0.0.1, 10.0.0.3-4 10.0.0.1").unwrap() {
+            Feeder::List(v) => assert_eq!(v, vec![ip("10.0.0.1"), ip("10.0.0.3"), ip("10.0.0.4")]),
+            f => panic!("{f:?}"),
+        }
+        assert!(parse_target("10.0.0.9-10.0.0.1").is_err());
+        assert!(parse_target("").is_err());
     }
 
     #[test]

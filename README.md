@@ -27,6 +27,7 @@ OxiScan is written in Rust, with a native GUI built on [egui](https://github.com
 - One click opens a host's web interface, file shares, SSH or Remote Desktop
 - Favorites for the networks you scan often, and a list of recent scans
 - Filter the results, rescan hosts, and export to text, CSV, XML or an IP:Port list
+- Built-in [MCP server](#use-from-ai-assistants-mcp), so AI assistants can scan your network too
 
 ## Building
 
@@ -48,6 +49,42 @@ Prebuilt binaries for Windows, Linux and macOS are attached to each [GitHub rele
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
+```
+
+## Use from AI assistants (MCP)
+
+`oxiscan mcp` runs OxiScan as a [Model Context Protocol](https://modelcontextprotocol.io/) server over stdio, without opening a window. An assistant can then answer questions like "what's on my network?" or "which devices have SSH open?".
+
+For Claude Code:
+
+```sh
+claude mcp add oxiscan -- /path/to/oxiscan mcp
+```
+
+For Claude Desktop and other clients, add it to the MCP server configuration (on Windows, the path ends in `oxiscan.exe`):
+
+```json
+{
+  "mcpServers": {
+    "oxiscan": { "command": "/path/to/oxiscan", "args": ["mcp"] }
+  }
+}
+```
+
+| Tool | What it does |
+|---|---|
+| `local_network` | This machine's address and the subnet to scan |
+| `scan` | Scan a subnet, range, list of addresses, host name or saved favorite. Ports: `web`, `common` (default), `well-known`, `none` or a list. `details` adds MAC, NetBIOS, web server and TTL |
+| `scan_host` | Scan one host in depth: ports 1-1024 plus all details |
+| `list_saved` | Favorites and recent scans from the app |
+
+Results are structured JSON: per host the address, hostname, ping, open ports with service names and web URLs, a guess at the device type and, with details, the operating system hint. A /24 scan takes about 30-60 seconds and reports progress while it runs. It uses the timing settings from the app.
+
+The server only reads: it offers none of the app's "open" actions and never changes your settings. By default it refuses public internet addresses and scans at most 4096 addresses at a time:
+
+```sh
+oxiscan mcp --allow-public      # also scan addresses outside private and local ranges
+oxiscan mcp --max-hosts 65536   # allow larger scans, e.g. a /16
 ```
 
 ## Status

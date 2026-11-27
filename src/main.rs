@@ -3,6 +3,7 @@
 mod app;
 mod config;
 mod export;
+mod mcp;
 mod net;
 mod opener;
 mod scanner;
@@ -12,6 +13,9 @@ use eframe::egui;
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("mcp") {
+        std::process::exit(mcp::run(&args[2..]));
+    }
     let mut screenshot: Option<std::path::PathBuf> = None;
     let mut demo: Option<app::DemoMode> = None;
     let mut theme: Option<config::ThemePref> = None;
