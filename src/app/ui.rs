@@ -20,7 +20,7 @@ const INSPECTOR_WIDTH: f32 = 420.0;
 // ------------------------------------------------------------------ small widgets
 
 fn section_label(ui: &mut Ui, text: &str) {
-    ui.label(RichText::new(text).font(semibold(11.0)).color(t::MUTED));
+    ui.label(RichText::new(text).font(semibold(11.0)).color(t::p().muted));
 }
 
 fn small(text: impl Into<String>, color: Color32) -> RichText {
@@ -29,12 +29,8 @@ fn small(text: impl Into<String>, color: Color32) -> RichText {
 
 fn hline(ui: &mut Ui) {
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
-    ui.painter().rect_filled(r, CornerRadius::ZERO, t::BORDER);
-}
-
-fn paint_logo(p: &egui::Painter, c: Pos2, radius: f32) {
-    p.circle_stroke(c, radius - 2.0, Stroke::new(4.0_f32, t::ACCENT));
-    p.circle_filled(c, radius * 0.24, t::SKY);
+    ui.painter()
+        .rect_filled(r, CornerRadius::ZERO, t::p().border);
 }
 
 /// Paints a filled button into `rect`; `resp` must be the interaction for that rect.
@@ -47,13 +43,13 @@ fn paint_filled_button(
     enabled: bool,
 ) {
     let fill = if !enabled {
-        t::ACCENT.gamma_multiply(0.45)
+        t::p().accent.gamma_multiply(0.45)
     } else if resp.is_pointer_button_down_on() {
-        t::ACCENT_DARK
+        t::p().accent_dark
     } else if resp.hovered() {
-        Color32::from_rgb(0xD9, 0x4E, 0x08)
+        t::p().accent_hover
     } else {
-        t::ACCENT
+        t::p().accent
     };
     ui.painter()
         .rect_filled(rect, CornerRadius::same(radius), fill);
@@ -62,7 +58,7 @@ fn paint_filled_button(
         Align2::CENTER_CENTER,
         text,
         semibold(13.0),
-        Color32::WHITE,
+        t::p().on_accent,
     );
 }
 
@@ -95,19 +91,23 @@ fn stop_button(ui: &mut Ui, text: &str, size: egui::Vec2, enabled: bool) -> Resp
     };
     let (rect, resp) = ui.allocate_exact_size(size, sense);
     let fill = if resp.hovered() {
-        t::RED_SOFT
+        t::p().red_soft
     } else {
-        Color32::WHITE
+        t::p().raised
     };
     let p = ui.painter();
     p.rect_filled(rect, CornerRadius::same(8), fill);
     p.rect_stroke(
         rect,
         CornerRadius::same(8),
-        Stroke::new(1.0_f32, t::RED_BORDER),
+        Stroke::new(1.0_f32, t::p().red_border),
         egui::StrokeKind::Inside,
     );
-    let color = if enabled { t::RED_TEXT } else { t::FAINT };
+    let color = if enabled {
+        t::p().red_text
+    } else {
+        t::p().faint
+    };
     p.text(
         rect.center(),
         Align2::CENTER_CENTER,
@@ -123,7 +123,7 @@ fn segmented(ui: &mut Ui, labels: &[&str], selected: usize) -> Option<usize> {
     let width = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(width, 30.0), Sense::hover());
     ui.painter()
-        .rect_filled(rect, CornerRadius::same(8), t::SEGMENT_BG);
+        .rect_filled(rect, CornerRadius::same(8), t::p().segment_bg);
     let seg_w = (width - 6.0) / labels.len() as f32;
     let mut clicked = None;
     for (i, label) in labels.iter().enumerate() {
@@ -135,23 +135,23 @@ fn segmented(ui: &mut Ui, labels: &[&str], selected: usize) -> Option<usize> {
         let active = i == selected;
         if active {
             ui.painter()
-                .rect_filled(r, CornerRadius::same(6), Color32::WHITE);
+                .rect_filled(r, CornerRadius::same(6), t::p().raised);
             ui.painter().rect_stroke(
                 r,
                 CornerRadius::same(6),
-                Stroke::new(1.0_f32, t::BORDER),
+                Stroke::new(1.0_f32, t::p().border),
                 egui::StrokeKind::Inside,
             );
         } else if resp.hovered() && ui.is_enabled() {
             ui.painter()
-                .rect_filled(r, CornerRadius::same(6), Color32::from_white_alpha(120));
+                .rect_filled(r, CornerRadius::same(6), t::p().hover);
         }
         let (font, color) = if active {
-            (semibold(12.0), t::TEXT)
+            (semibold(12.0), t::p().text)
         } else {
-            (regular(12.0), t::TEXT_2)
+            (regular(12.0), t::p().text_2)
         };
-        let color = if ui.is_enabled() { color } else { t::FAINT };
+        let color = if ui.is_enabled() { color } else { t::p().faint };
         ui.painter()
             .text(r.center(), Align2::CENTER_CENTER, *label, font, color);
         if resp.clicked() {
@@ -169,14 +169,14 @@ fn toggle(ui: &mut Ui, on: &mut bool) -> Response {
     }
     let t_on = ui.ctx().animate_bool(resp.id, *on);
     let fill = if ui.is_enabled() {
-        lerp_color(t::INPUT_BORDER, t::ACCENT, t_on)
+        lerp_color(t::p().input_border, t::p().accent, t_on)
     } else {
-        t::BORDER
+        t::p().border
     };
     let p = ui.painter();
     p.rect_filled(rect, CornerRadius::same(9), fill);
     let x = egui::lerp(rect.left() + 9.0..=rect.right() - 9.0, t_on);
-    p.circle_filled(pos2(x, rect.center().y), 7.0, Color32::WHITE);
+    p.circle_filled(pos2(x, rect.center().y), 7.0, t::p().on_accent);
     resp
 }
 
@@ -187,7 +187,7 @@ fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
 
 fn labeled_row(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new(label).size(12.5).color(t::TEXT_2));
+        ui.label(RichText::new(label).size(12.5).color(t::p().text_2));
         ui.with_layout(Layout::right_to_left(Align::Center), add);
     });
 }
@@ -263,15 +263,23 @@ fn ping_method_label(m: PingMethod) -> &'static str {
 }
 
 fn device_style(kind: DeviceKind) -> (&'static str, Color32, Color32) {
-    match kind {
+    let c = t::p();
+    let (icon, soft, fg) = match kind {
         DeviceKind::Router => (icon::WIFI_HIGH, rgb(0xE0F2FE), rgb(0x0284C7)),
-        DeviceKind::Nas => (icon::HARD_DRIVES, t::ACCENT_SOFT, t::ACCENT),
+        DeviceKind::Nas => (icon::HARD_DRIVES, c.accent_soft, c.accent),
         DeviceKind::Printer => (icon::PRINTER, rgb(0xEEF2FF), rgb(0x4F46E5)),
         DeviceKind::Tv => (icon::TELEVISION, rgb(0xECFDF5), rgb(0x059669)),
         DeviceKind::Phone => (icon::DEVICE_MOBILE, rgb(0xF5F3FF), rgb(0x7C3AED)),
         DeviceKind::Computer => (icon::DESKTOP, rgb(0xE0F2FE), rgb(0x0284C7)),
         DeviceKind::SingleBoard => (icon::CPU, rgb(0xFDF2F8), rgb(0xDB2777)),
-        DeviceKind::Unknown => (icon::QUESTION, t::CARD, t::MUTED),
+        DeviceKind::Unknown => return (icon::QUESTION, c.card, c.muted),
+    };
+    if c.dark {
+        // Brighter icon on a dim tint of the same hue.
+        let fg = lerp_color(fg, Color32::WHITE, 0.3);
+        (icon, lerp_color(c.bg, fg, 0.2), fg)
+    } else {
+        (icon, soft, fg)
     }
 }
 
@@ -282,11 +290,16 @@ fn rgb(v: u32) -> Color32 {
 /// Status pill text and colours: (label, text colour, background, dot).
 fn status_style(r: &ScanResult) -> (&'static str, Color32, Color32, Color32) {
     if r.has_ports() {
-        ("Ports open", t::GREEN_TEXT, t::GREEN_SOFT, t::GREEN)
+        (
+            "Ports open",
+            t::p().green_text,
+            t::p().green_soft,
+            t::p().green,
+        )
     } else if r.alive {
-        ("Online", t::BLUE_TEXT, t::BLUE_SOFT, t::BLUE)
+        ("Online", t::p().blue_text, t::p().blue_soft, t::p().blue)
     } else {
-        ("No response", t::RED_TEXT, t::RED_SOFT, t::RED)
+        ("No response", t::p().red_text, t::p().red_soft, t::p().red)
     }
 }
 
@@ -425,20 +438,24 @@ impl ScannerApp {
         egui::SidePanel::left("sidebar")
             .exact_width(SIDEBAR_WIDTH)
             .resizable(false)
-            .frame(egui::Frame::new().fill(t::SIDEBAR).inner_margin(Margin {
-                left: 20,
-                right: 20,
-                top: 18,
-                bottom: 12,
-            }))
+            .frame(
+                egui::Frame::new()
+                    .fill(t::p().sidebar)
+                    .inner_margin(Margin {
+                        left: 20,
+                        right: 20,
+                        top: 18,
+                        bottom: 12,
+                    }),
+            )
             .show(ctx, |ui| self.sidebar(ui));
         egui::SidePanel::right("inspector")
             .exact_width(INSPECTOR_WIDTH)
             .resizable(false)
-            .frame(egui::Frame::new().fill(t::INSPECTOR))
+            .frame(egui::Frame::new().fill(t::p().inspector))
             .show(ctx, |ui| self.inspector(ui, ctx));
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(t::BG))
+            .frame(egui::Frame::new().fill(t::p().bg))
             .show(ctx, |ui| {
                 if self.results.is_empty() && self.scan.is_none() {
                     self.empty_state(ui);
@@ -453,15 +470,20 @@ impl ScannerApp {
     fn sidebar(&mut self, ui: &mut Ui) {
         let scanning = self.scan.is_some();
         ui.horizontal(|ui| {
-            let (r, _) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::hover());
-            paint_logo(ui.painter(), r.center(), 11.0);
-            ui.label(RichText::new("OxiScan").font(semibold(15.0)).color(t::TEXT));
+            ui.add(egui::Image::new(&self.logo).fit_to_exact_size(vec2(24.0, 24.0)));
+            ui.label(
+                RichText::new("OxiScan")
+                    .font(semibold(15.0))
+                    .color(t::p().text),
+            );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let w = &mut ui.visuals_mut().widgets;
                 w.inactive.bg_stroke = Stroke::NONE;
                 w.inactive.weak_bg_fill = Color32::TRANSPARENT;
                 ui.menu_button(
-                    RichText::new(icon::DOTS_THREE).size(18.0).color(t::MUTED),
+                    RichText::new(icon::DOTS_THREE)
+                        .size(18.0)
+                        .color(t::p().muted),
                     |ui| {
                         if ui.button(format!("{}  Settings…", icon::GEAR)).clicked() {
                             self.show_settings = true;
@@ -509,9 +531,9 @@ impl ScannerApp {
                         RichText::new(format!("Advanced options  {caret}"))
                             .font(semibold(12.0))
                             .color(if self.show_advanced {
-                                t::TEXT
+                                t::p().text
                             } else {
-                                t::TEXT_2
+                                t::p().text_2
                             }),
                     )
                     .sense(Sense::click()),
@@ -567,36 +589,41 @@ impl ScannerApp {
                             plural(n as usize, "address", "addresses"),
                             if here { " · your current network" } else { "" }
                         ),
-                        t::MUTED,
+                        t::p().muted,
                     )
                 } else if text.is_empty() {
-                    ("Enter a subnet such as 192.168.1.0/24".into(), t::MUTED)
+                    ("Enter a subnet such as 192.168.1.0/24".into(), t::p().muted)
                 } else if text.chars().any(|c| c.is_ascii_alphabetic()) {
-                    ("Host name, looked up when the scan starts".into(), t::MUTED)
+                    (
+                        "Host name, looked up when the scan starts".into(),
+                        t::p().muted,
+                    )
                 } else {
-                    ("Not a valid subnet or address".into(), t::RED_TEXT)
+                    ("Not a valid subnet or address".into(), t::p().red_text)
                 };
                 ui.label(small(hint, color));
             }
             FeederKind::Range => {
-                ui.label(RichText::new("From").size(12.0).color(t::TEXT_2));
+                ui.label(RichText::new("From").size(12.0).color(t::p().text_2));
                 text_input(ui, &mut self.feeder.start, mono(13.0), "192.168.1.1");
-                ui.label(RichText::new("To").size(12.0).color(t::TEXT_2));
+                ui.label(RichText::new("To").size(12.0).color(t::p().text_2));
                 text_input(ui, &mut self.feeder.end, mono(13.0), "192.168.1.254");
                 let a = self.feeder.start.trim().parse::<Ipv4Addr>();
                 let b = self.feeder.end.trim().parse::<Ipv4Addr>();
                 let (hint, color) = match (a, b) {
                     (Ok(a), Ok(b)) if u32::from(a) <= u32::from(b) => (
                         plural(scannable_count(a, b, skip) as usize, "address", "addresses"),
-                        t::MUTED,
+                        t::p().muted,
                     ),
-                    (Ok(_), Ok(_)) => ("The start must come before the end".into(), t::RED_TEXT),
-                    _ => ("Enter two IPv4 addresses".into(), t::MUTED),
+                    (Ok(_), Ok(_)) => {
+                        ("The start must come before the end".into(), t::p().red_text)
+                    }
+                    _ => ("Enter two IPv4 addresses".into(), t::p().muted),
                 };
                 ui.label(small(hint, color));
             }
             FeederKind::Random => {
-                ui.label(RichText::new("Network").size(12.0).color(t::TEXT_2));
+                ui.label(RichText::new("Network").size(12.0).color(t::p().text_2));
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.feeder.random_base)
@@ -604,13 +631,13 @@ impl ScannerApp {
                             .desired_width(150.0)
                             .margin(Margin::symmetric(10, 7)),
                     );
-                    ui.label(RichText::new("/").color(t::MUTED));
+                    ui.label(RichText::new("/").color(t::p().muted));
                     ui.add(egui::DragValue::new(&mut self.feeder.random_prefix).range(0..=32));
                 });
                 ui.label(
                     RichText::new("Addresses to try")
                         .size(12.0)
-                        .color(t::TEXT_2),
+                        .color(t::p().text_2),
                 );
                 text_input(ui, &mut self.feeder.random_count, mono(13.0), "100");
             }
@@ -625,12 +652,15 @@ impl ScannerApp {
                     self.choose_list_file();
                 }
                 if self.feeder.list_path.is_empty() {
-                    ui.label(small("A text file with one or more IP addresses", t::MUTED));
+                    ui.label(small(
+                        "A text file with one or more IP addresses",
+                        t::p().muted,
+                    ));
                 } else {
                     ui.label(
                         RichText::new(truncate(&target_text(&self.feeder), 30))
                             .font(semibold(12.5))
-                            .color(t::TEXT),
+                            .color(t::p().text),
                     )
                     .on_hover_text(&self.feeder.list_path);
                     ui.label(small(
@@ -638,7 +668,7 @@ impl ScannerApp {
                             "{} loaded",
                             plural(self.list_ips.len(), "address", "addresses")
                         ),
-                        t::MUTED,
+                        t::p().muted,
                     ));
                 }
             }
@@ -646,7 +676,7 @@ impl ScannerApp {
     }
 
     fn ports_editor(&mut self, ui: &mut Ui) {
-        ui.label(RichText::new("Ports").size(12.0).color(t::TEXT_2));
+        ui.label(RichText::new("Ports").size(12.0).color(t::p().text_2));
         let preset = PRESETS
             .iter()
             .position(|(_, p)| *p == self.config.settings.ports.as_str());
@@ -683,13 +713,13 @@ impl ScannerApp {
         }
         match scanner::parse_ports(&self.config.settings.ports) {
             Ok(v) if v.is_empty() => {
-                ui.label(small("No ports: hosts are only pinged", t::MUTED));
+                ui.label(small("No ports: hosts are only pinged", t::p().muted));
             }
             Ok(v) => {
-                ui.label(small(plural(v.len(), "port", "ports"), t::MUTED));
+                ui.label(small(plural(v.len(), "port", "ports"), t::p().muted));
             }
             Err(e) => {
-                ui.label(small(e, t::RED_TEXT));
+                ui.label(small(e, t::p().red_text));
             }
         }
     }
@@ -700,7 +730,7 @@ impl ScannerApp {
         labeled_row(ui, "Threads", |ui| {
             ui.add(egui::DragValue::new(&mut s.max_threads).range(1..=1000));
         });
-        ui.label(RichText::new("Ping method").size(12.5).color(t::TEXT_2));
+        ui.label(RichText::new("Ping method").size(12.5).color(t::p().text_2));
         egui::ComboBox::from_id_salt("ping_method")
             .width(ui.available_width())
             .selected_text(ping_method_label(s.ping_method))
@@ -751,8 +781,9 @@ impl ScannerApp {
                 ui.end_row();
             });
         ui.vertical_centered(|ui| {
-            let reset = ui
-                .add(egui::Label::new(small("Reset to defaults", t::MUTED)).sense(Sense::click()));
+            let reset = ui.add(
+                egui::Label::new(small("Reset to defaults", t::p().muted)).sense(Sense::click()),
+            );
             if reset.on_hover_cursor(CursorIcon::PointingHand).clicked() {
                 let keep_confirm = s.ask_confirm_new_scan;
                 *s = Settings::default();
@@ -787,7 +818,7 @@ impl ScannerApp {
                 } else {
                     format!("{pct:.0}%")
                 };
-                ui.vertical_centered(|ui| ui.label(small(text, t::MUTED)));
+                ui.vertical_centered(|ui| ui.label(small(text, t::p().muted)));
             }
             None => {
                 if primary_button(ui, &format!("{}  Start scan", icon::PLAY), size, 8, true)
@@ -811,9 +842,13 @@ impl ScannerApp {
             let active = current == Some(i);
             let p = ui.painter();
             if active {
-                p.rect_filled(rect, CornerRadius::same(6), t::SEGMENT_BG);
+                p.rect_filled(rect, CornerRadius::same(6), t::p().segment_bg);
             } else if resp.hovered() {
-                p.rect_filled(rect, CornerRadius::same(6), t::BORDER.gamma_multiply(0.6));
+                p.rect_filled(
+                    rect,
+                    CornerRadius::same(6),
+                    t::p().border.gamma_multiply(0.6),
+                );
             }
             let cy = rect.center().y;
             p.text(
@@ -821,7 +856,7 @@ impl ScannerApp {
                 Align2::LEFT_CENTER,
                 icon::STAR,
                 regular(14.0),
-                if active { t::ACCENT } else { t::FAINT },
+                if active { t::p().accent } else { t::p().faint },
             );
             p.text(
                 pos2(rect.left() + 30.0, cy),
@@ -832,7 +867,7 @@ impl ScannerApp {
                 } else {
                     regular(13.0)
                 },
-                if active { t::TEXT } else { t::TEXT_2 },
+                if active { t::p().text } else { t::p().text_2 },
             );
             let suffix = match fav.feeder.kind {
                 FeederKind::Subnet => fav
@@ -850,7 +885,7 @@ impl ScannerApp {
                 Align2::RIGHT_CENTER,
                 suffix,
                 mono(11.0),
-                t::MUTED,
+                t::p().muted,
             );
             let resp = resp
                 .on_hover_text(target_text(&fav.feeder))
@@ -869,12 +904,12 @@ impl ScannerApp {
             });
         }
         if self.config.favorites.is_empty() {
-            ui.label(small("Save the targets you scan often", t::FAINT));
+            ui.label(small("Save the targets you scan often", t::p().faint));
         }
         let add = ui.add(
             egui::Label::new(small(
                 format!("{}  Save current as favorite", icon::PLUS),
-                t::MUTED,
+                t::p().muted,
             ))
             .sense(Sense::click()),
         );
@@ -905,18 +940,18 @@ impl ScannerApp {
                 Align2::LEFT_CENTER,
                 "Now",
                 regular(13.0),
-                t::TEXT_2,
+                t::p().text_2,
             );
             p.text(
                 pos2(rect.right() - 6.0, rect.center().y),
                 Align2::RIGHT_CENTER,
                 "scanning…",
                 regular(12.0),
-                t::ACCENT,
+                t::p().accent,
             );
         }
         if self.config.recent.is_empty() && self.scan.is_none() {
-            ui.label(small("No scans yet", t::FAINT));
+            ui.label(small("No scans yet", t::p().faint));
         }
         for r in &self.config.recent {
             let (rect, resp) =
@@ -925,7 +960,7 @@ impl ScannerApp {
                 ui.painter().rect_filled(
                     rect,
                     CornerRadius::same(6),
-                    t::BORDER.gamma_multiply(0.6),
+                    t::p().border.gamma_multiply(0.6),
                 );
             }
             let p = ui.painter();
@@ -934,14 +969,14 @@ impl ScannerApp {
                 Align2::LEFT_CENTER,
                 relative_time(r.at),
                 regular(13.0),
-                t::TEXT_2,
+                t::p().text_2,
             );
             p.text(
                 pos2(rect.right() - 6.0, rect.center().y),
                 Align2::RIGHT_CENTER,
                 format!("{} online", r.online),
                 regular(12.0),
-                t::MUTED,
+                t::p().muted,
             );
             if resp
                 .on_hover_text(&r.target)
@@ -1029,8 +1064,12 @@ impl ScannerApp {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 2.0;
-                        ui.label(RichText::new(&title).font(semibold(18.0)).color(t::TEXT));
-                        ui.label(RichText::new(&subtitle).size(12.0).color(t::MUTED));
+                        ui.label(
+                            RichText::new(&title)
+                                .font(semibold(18.0))
+                                .color(t::p().text),
+                        );
+                        ui.label(RichText::new(&subtitle).size(12.0).color(t::p().muted));
                     });
                     ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
                         ui.add_enabled_ui(!self.results.is_empty(), |ui| {
@@ -1071,7 +1110,7 @@ impl ScannerApp {
                         ui.spacing_mut().item_spacing.x = 6.0;
                         if self.search_open {
                             let close = ui.add(
-                                egui::Button::new(RichText::new(icon::X).color(t::MUTED))
+                                egui::Button::new(RichText::new(icon::X).color(t::p().muted))
                                     .frame(false),
                             );
                             let edit = ui.add(
@@ -1098,7 +1137,7 @@ impl ScannerApp {
                                     egui::Button::new(
                                         RichText::new(icon::MAGNIFYING_GLASS)
                                             .size(15.0)
-                                            .color(t::MUTED),
+                                            .color(t::p().muted),
                                     )
                                     .frame(false),
                                 )
@@ -1115,11 +1154,12 @@ impl ScannerApp {
         // Divider under the tabs, with the scan progress drawn on top of it.
         let (line, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
         ui.painter()
-            .rect_filled(line, CornerRadius::ZERO, t::BORDER);
+            .rect_filled(line, CornerRadius::ZERO, t::p().border);
         if let Some(h) = &self.scan {
             let w = line.width() * h.progress().clamp(0.0, 1.0);
             let bar = Rect::from_min_size(line.min - vec2(0.0, 2.0), vec2(w, 3.0));
-            ui.painter().rect_filled(bar, CornerRadius::ZERO, t::ACCENT);
+            ui.painter()
+                .rect_filled(bar, CornerRadius::ZERO, t::p().accent);
         }
 
         self.host_list(ui, ctx, &counts);
@@ -1134,11 +1174,11 @@ impl ScannerApp {
         } else {
             regular(13.0)
         };
-        let color = if active { t::TEXT } else { t::MUTED };
+        let color = if active { t::p().text } else { t::p().muted };
         let galley = ui.painter().layout_no_wrap(text, font, color);
         let (rect, resp) = ui.allocate_exact_size(vec2(galley.size().x, 30.0), Sense::click());
         let color = if resp.hovered() && !active {
-            t::TEXT_2
+            t::p().text_2
         } else {
             color
         };
@@ -1149,7 +1189,8 @@ impl ScannerApp {
                 pos2(rect.left(), rect.bottom() - 2.0),
                 vec2(rect.width(), 2.0),
             );
-            ui.painter().rect_filled(bar, CornerRadius::ZERO, t::ACCENT);
+            ui.painter()
+                .rect_filled(bar, CornerRadius::ZERO, t::p().accent);
         }
         resp.on_hover_cursor(CursorIcon::PointingHand).clicked()
     }
@@ -1257,7 +1298,7 @@ impl ScannerApp {
                                 Align2::LEFT_BOTTOM,
                                 text,
                                 semibold(11.0),
-                                t::MUTED,
+                                t::p().muted,
                             );
                         }
                         Item::Note(text) => {
@@ -1266,7 +1307,7 @@ impl ScannerApp {
                                 Align2::LEFT_CENTER,
                                 text,
                                 regular(12.0),
-                                t::FAINT,
+                                t::p().faint,
                             );
                         }
                         Item::Scanning(text) => {
@@ -1277,7 +1318,7 @@ impl ScannerApp {
                                 Align2::LEFT_CENTER,
                                 text,
                                 regular(12.0),
-                                t::MUTED,
+                                t::p().muted,
                             );
                             ctx.request_repaint();
                         }
@@ -1371,12 +1412,12 @@ impl ScannerApp {
         let rect = ui.max_rect();
         let c = rect.center() - vec2(0.0, 70.0);
         let p = ui.painter();
-        p.circle_stroke(c, 80.0, Stroke::new(2.0_f32, t::CARD));
-        p.circle_stroke(c, 50.0, Stroke::new(2.0_f32, t::DIVIDER));
-        p.circle_stroke(c, 27.5, Stroke::new(9.0_f32, t::ACCENT));
-        p.circle_filled(c, 6.0, t::SKY);
-        p.circle_filled(c + vec2(74.0, -38.0), 4.0, t::BLUE_SOFT);
-        p.circle_filled(c + vec2(-64.0, 33.0), 3.5, t::GREEN_SOFT);
+        p.circle_stroke(c, 80.0, Stroke::new(2.0_f32, t::p().card));
+        p.circle_stroke(c, 50.0, Stroke::new(2.0_f32, t::p().divider));
+        p.circle_stroke(c, 27.5, Stroke::new(9.0_f32, t::p().accent));
+        p.circle_filled(c, 6.0, t::p().sky);
+        p.circle_filled(c + vec2(74.0, -38.0), 4.0, t::p().blue_soft);
+        p.circle_filled(c + vec2(-64.0, 33.0), 3.5, t::p().green_soft);
 
         let name = if self.current_favorite().is_some() {
             title
@@ -1388,7 +1429,7 @@ impl ScannerApp {
             Align2::CENTER_CENTER,
             format!("Ready to scan {name}"),
             semibold(17.0),
-            t::TEXT,
+            t::p().text,
         );
         let line1 = match self.feeder.kind {
             FeederKind::Subnet => match services::parse_cidr(&self.feeder.cidr) {
@@ -1409,14 +1450,14 @@ impl ScannerApp {
             Align2::CENTER_CENTER,
             line1,
             regular(13.0),
-            t::MUTED,
+            t::p().muted,
         );
         p.text(
             c + vec2(0.0, 168.0),
             Align2::CENTER_CENTER,
             "and list every device that answers.",
             regular(13.0),
-            t::MUTED,
+            t::p().muted,
         );
         let btn = Rect::from_center_size(c + vec2(0.0, 214.0), vec2(136.0, 38.0));
         let resp = ui
@@ -1438,7 +1479,7 @@ impl ScannerApp {
             Align2::CENTER_CENTER,
             "or press Ctrl+Enter",
             regular(11.5),
-            t::FAINT,
+            t::p().faint,
         );
     }
 
@@ -1453,21 +1494,21 @@ impl ScannerApp {
                 Align2::CENTER_CENTER,
                 icon::CURSOR_CLICK,
                 regular(28.0),
-                t::INPUT_BORDER,
+                t::p().input_border,
             );
             p.text(
                 c,
                 Align2::CENTER_CENTER,
                 "Select a host to see its details,",
                 regular(13.0),
-                t::FAINT,
+                t::p().faint,
             );
             p.text(
                 c + vec2(0.0, 20.0),
                 Align2::CENTER_CENTER,
                 "services and actions here.",
                 regular(13.0),
-                t::FAINT,
+                t::p().faint,
             );
             return;
         };
@@ -1481,7 +1522,7 @@ impl ScannerApp {
         egui::TopBottomPanel::bottom("inspector_actions")
             .frame(
                 egui::Frame::new()
-                    .fill(t::INSPECTOR)
+                    .fill(t::p().inspector)
                     .inner_margin(Margin::symmetric(23, 14)),
             )
             .show_inside(ui, |ui| {
@@ -1523,12 +1564,16 @@ impl ScannerApp {
             });
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(t::INSPECTOR).inner_margin(Margin {
-                left: 23,
-                right: 23,
-                top: 22,
-                bottom: 8,
-            }))
+            .frame(
+                egui::Frame::new()
+                    .fill(t::p().inspector)
+                    .inner_margin(Margin {
+                        left: 23,
+                        right: 23,
+                        top: 22,
+                        bottom: 8,
+                    }),
+            )
             .show_inside(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("inspector_scroll")
@@ -1596,9 +1641,9 @@ impl ScannerApp {
             (None, false) => "No response".into(),
         };
         let name_color = if r.hostname.is_some() {
-            t::TEXT
+            t::p().text
         } else {
-            t::MUTED
+            t::p().muted
         };
         let p = ui.painter();
         p.text(
@@ -1621,7 +1666,7 @@ impl ScannerApp {
             Align2::LEFT_TOP,
             sub,
             mono(11.5),
-            t::MUTED,
+            t::p().muted,
         );
     }
 
@@ -1678,20 +1723,20 @@ impl ScannerApp {
                 let card =
                     Rect::from_min_size(row.min + vec2(k as f32 * (w + gap), 0.0), vec2(w, 58.0));
                 let p = ui.painter();
-                p.rect_filled(card, CornerRadius::same(8), t::CARD);
+                p.rect_filled(card, CornerRadius::same(8), t::p().card);
                 p.text(
                     card.min + vec2(12.0, 10.0),
                     Align2::LEFT_TOP,
                     *label,
                     regular(11.0),
-                    t::MUTED,
+                    t::p().muted,
                 );
                 let (font, color) = if !known {
-                    (regular(13.0), t::FAINT)
+                    (regular(13.0), t::p().faint)
                 } else if *is_mono {
-                    (FontId::new(12.5, egui::FontFamily::Monospace), t::TEXT)
+                    (FontId::new(12.5, egui::FontFamily::Monospace), t::p().text)
                 } else {
-                    (semibold(14.0), t::TEXT)
+                    (semibold(14.0), t::p().text)
                 };
                 let max_chars = if *is_mono { 22 } else { 21 };
                 let resp_text = truncate(value, max_chars);
@@ -1718,7 +1763,7 @@ impl ScannerApp {
             ui.label(
                 RichText::new("This address didn't answer.")
                     .size(13.0)
-                    .color(t::FAINT),
+                    .color(t::p().faint),
             );
             return None;
         }
@@ -1726,7 +1771,7 @@ impl ScannerApp {
             ui.label(
                 RichText::new("Ports were not checked for this host.")
                     .size(13.0)
-                    .color(t::FAINT),
+                    .color(t::p().faint),
             );
             return None;
         }
@@ -1740,7 +1785,7 @@ impl ScannerApp {
                     plural(checked, "port", "ports")
                 ))
                 .size(13.0)
-                .color(t::FAINT),
+                .color(t::p().faint),
             );
             return None;
         }
@@ -1754,7 +1799,7 @@ impl ScannerApp {
                 Align2::LEFT_CENTER,
                 port.to_string(),
                 FontId::new(12.5, egui::FontFamily::Monospace),
-                t::TEXT,
+                t::p().text,
             );
             let name = services::service_name(port);
             p.text(
@@ -1766,12 +1811,16 @@ impl ScannerApp {
                     name
                 },
                 regular(13.0),
-                if name.is_empty() { t::FAINT } else { t::TEXT_2 },
+                if name.is_empty() {
+                    t::p().faint
+                } else {
+                    t::p().text_2
+                },
             );
             p.rect_filled(
                 Rect::from_min_size(pos2(row.left(), row.bottom() - 1.0), vec2(row.width(), 1.0)),
                 CornerRadius::ZERO,
-                t::DIVIDER,
+                t::p().divider,
             );
             if let Some((label, opener)) = services::port_action(r.ip, port) {
                 let text = if label == "Open" {
@@ -1779,7 +1828,9 @@ impl ScannerApp {
                 } else {
                     label.to_string()
                 };
-                let galley = ui.painter().layout_no_wrap(text, semibold(12.0), t::ACCENT);
+                let galley = ui
+                    .painter()
+                    .layout_no_wrap(text, semibold(12.0), t::p().accent);
                 let link = Rect::from_min_size(
                     pos2(row.right() - galley.size().x, cy - galley.size().y / 2.0),
                     galley.size(),
@@ -1792,9 +1843,9 @@ impl ScannerApp {
                     )
                     .on_hover_cursor(CursorIcon::PointingHand);
                 let color = if resp.hovered() {
-                    t::ACCENT_DARK
+                    t::p().accent_dark
                 } else {
-                    t::ACCENT
+                    t::p().accent
                 };
                 ui.painter().galley(link.min, galley, color);
                 if resp.clicked() {
@@ -1893,7 +1944,7 @@ fn local_is(local: Option<Ipv4Addr>, ip: Ipv4Addr) -> bool {
 fn paint_spinner(ui: &Ui, c: Pos2, r: f32) {
     let time = ui.input(|i| i.time) as f32;
     let p = ui.painter();
-    p.circle_stroke(c, r, Stroke::new(2.0_f32, t::BORDER));
+    p.circle_stroke(c, r, Stroke::new(2.0_f32, t::p().border));
     let start = time * 5.0;
     let points: Vec<Pos2> = (0..=16)
         .map(|k| {
@@ -1901,7 +1952,10 @@ fn paint_spinner(ui: &Ui, c: Pos2, r: f32) {
             c + r * vec2(a.cos(), a.sin())
         })
         .collect();
-    p.add(egui::Shape::line(points, Stroke::new(2.0_f32, t::ACCENT)));
+    p.add(egui::Shape::line(
+        points,
+        Stroke::new(2.0_f32, t::p().accent),
+    ));
 }
 
 fn paint_host_row(
@@ -1914,20 +1968,24 @@ fn paint_host_row(
 ) {
     let p = ui.painter();
     if selected {
-        p.rect_filled(rect, CornerRadius::ZERO, t::ACCENT_SOFT);
+        p.rect_filled(rect, CornerRadius::ZERO, t::p().accent_soft);
         p.rect_filled(
             Rect::from_min_size(rect.min, vec2(3.0, rect.height())),
             CornerRadius::ZERO,
-            t::ACCENT,
+            t::p().accent,
         );
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::ZERO, rgb(0xF9FAFB));
+        p.rect_filled(rect, CornerRadius::ZERO, t::p().hover);
     }
-    let dot = if r.has_ports() { t::GREEN } else { t::BLUE };
+    let dot = if r.has_ports() {
+        t::p().green
+    } else {
+        t::p().blue
+    };
     p.circle_filled(pos2(rect.left() + 27.0, rect.center().y), 4.0, dot);
     let (name, color) = match &r.hostname {
-        Some(h) => (truncate(h, 34), t::TEXT),
-        None => ("Unknown device".to_string(), t::FAINT),
+        Some(h) => (truncate(h, 34), t::p().text),
+        None => ("Unknown device".to_string(), t::p().faint),
     };
     let name_rect = p.text(
         rect.min + vec2(41.0, 8.0),
@@ -1937,7 +1995,7 @@ fn paint_host_row(
         color,
     );
     if this_device {
-        let galley = p.layout_no_wrap("This device".into(), semibold(10.0), t::MUTED);
+        let galley = p.layout_no_wrap("This device".into(), semibold(10.0), t::p().muted);
         let tag = Rect::from_min_size(
             pos2(name_rect.right() + 8.0, name_rect.top() + 0.5),
             vec2(galley.size().x + 10.0, 17.0),
@@ -1945,12 +2003,12 @@ fn paint_host_row(
         p.rect_filled(
             tag,
             CornerRadius::same(4),
-            if selected { Color32::WHITE } else { t::CARD },
+            if selected { t::p().raised } else { t::p().card },
         );
         p.galley(
             tag.min + vec2(5.0, (17.0 - galley.size().y) / 2.0),
             galley,
-            t::MUTED,
+            t::p().muted,
         );
     }
     p.text(
@@ -1958,7 +2016,7 @@ fn paint_host_row(
         Align2::LEFT_TOP,
         r.ip.to_string(),
         mono(11.5),
-        t::MUTED,
+        t::p().muted,
     );
     let right = rect.right() - 23.0;
     if let Some(ms) = r.ping_ms {
@@ -1967,7 +2025,7 @@ fn paint_host_row(
             Align2::RIGHT_CENTER,
             format!("{ms} ms"),
             regular(12.0),
-            t::MUTED,
+            t::p().muted,
         );
     }
     if r.has_ports() {
@@ -1977,8 +2035,8 @@ fn paint_host_row(
             right - 60.0,
             rect.center().y,
             &text,
-            t::TEXT_2,
-            if selected { Color32::WHITE } else { t::CARD },
+            t::p().text_2,
+            if selected { t::p().raised } else { t::p().card },
             None,
         );
     }
@@ -1987,32 +2045,32 @@ fn paint_host_row(
 fn paint_dead_row(ui: &Ui, rect: Rect, resp: &Response, r: &ScanResult, selected: bool) {
     let p = ui.painter();
     if selected {
-        p.rect_filled(rect, CornerRadius::ZERO, t::ACCENT_SOFT);
+        p.rect_filled(rect, CornerRadius::ZERO, t::p().accent_soft);
         p.rect_filled(
             Rect::from_min_size(rect.min, vec2(3.0, rect.height())),
             CornerRadius::ZERO,
-            t::ACCENT,
+            t::p().accent,
         );
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::ZERO, rgb(0xF9FAFB));
+        p.rect_filled(rect, CornerRadius::ZERO, t::p().hover);
     }
     p.circle_filled(
         pos2(rect.left() + 27.0, rect.center().y),
         3.5,
-        t::RED.gamma_multiply(0.7),
+        t::p().red.gamma_multiply(0.7),
     );
     p.text(
         pos2(rect.left() + 41.0, rect.center().y),
         Align2::LEFT_CENTER,
         r.ip.to_string(),
         mono(12.0),
-        t::MUTED,
+        t::p().muted,
     );
     p.text(
         pos2(rect.right() - 23.0, rect.center().y),
         Align2::RIGHT_CENTER,
         "No response",
         regular(12.0),
-        t::FAINT,
+        t::p().faint,
     );
 }

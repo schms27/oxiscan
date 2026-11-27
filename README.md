@@ -91,10 +91,6 @@ oxiscan mcp --max-hosts 65536   # allow larger scans, e.g. a /16
 
 This is an early first version, developed and tested on Windows. Linux and macOS builds are possible but have not been tested much.
 
-## Background
-
-OxiScan is a clean-room reimplementation inspired by the feature set of [Angry IP Scanner](https://angryip.org/). It shares no code with that project and is not affiliated with or endorsed by it.
-
 ## Support
 
 OxiScan is free and open source. If it's useful to you, you can [buy me a coffee on Ko-fi](https://ko-fi.com/schms27). It's a thank-you, not a support contract: issues and pull requests are welcome either way.

@@ -23,6 +23,26 @@ pub enum DisplayFilter {
     OpenPorts,
 }
 
+/// Day or night colours, or whatever the operating system uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ThemePref {
+    #[default]
+    System,
+    Day,
+    Night,
+}
+
+impl ThemePref {
+    pub fn parse(s: &str) -> Option<ThemePref> {
+        match s.to_ascii_lowercase().as_str() {
+            "system" => Some(ThemePref::System),
+            "day" | "light" => Some(ThemePref::Day),
+            "night" | "dark" => Some(ThemePref::Night),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct FeederState {
@@ -161,6 +181,7 @@ pub struct Config {
     pub display: DisplayFilter,
     pub last_feeder: Option<FeederState>,
     pub recent: Vec<RecentScan>,
+    pub theme: ThemePref,
 }
 
 fn path() -> Option<PathBuf> {

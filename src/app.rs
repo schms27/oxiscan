@@ -7,7 +7,9 @@ mod theme;
 mod ui;
 
 pub(crate) use crate::config::target_text;
-use crate::config::{default_feeder, Config, DisplayFilter, FeederKind, FeederState, RecentScan};
+use crate::config::{
+    default_feeder, Config, DisplayFilter, FeederKind, FeederState, RecentScan, ThemePref,
+};
 use crate::export::{self, cell, COLUMNS};
 use crate::net;
 use crate::opener::Opener;
@@ -80,6 +82,8 @@ pub struct ScannerApp {
     fav_name: String,
     confirm_new_scan: bool,
 
+    logo: egui::TextureHandle,
+
     /// Demo and screenshot runs never write the user's config file.
     no_save: bool,
     screenshot: Option<PathBuf>,
@@ -92,15 +96,19 @@ impl ScannerApp {
         cc: &eframe::CreationContext<'_>,
         screenshot: Option<PathBuf>,
         demo: Option<DemoMode>,
+        theme_override: Option<ThemePref>,
     ) -> Self {
-        theme::install_fonts(&cc.egui_ctx);
-        theme::apply_style(&cc.egui_ctx);
-
-        let config = if demo.is_some() {
+        let mut config = if demo.is_some() {
             Config::default()
         } else {
             Config::load()
         };
+        if let Some(t) = theme_override {
+            config.theme = t;
+        }
+        theme::install_fonts(&cc.egui_ctx);
+        theme::apply_style(&cc.egui_ctx, egui_theme(config.theme));
+
         let feeder = config.last_feeder.clone().unwrap_or_else(default_feeder);
         let mut list_ips = Vec::new();
         if feeder.kind == FeederKind::List && !feeder.list_path.is_empty() {
@@ -140,6 +148,7 @@ impl ScannerApp {
             show_add_fav: false,
             fav_name: String::new(),
             confirm_new_scan: false,
+            logo: load_logo(&cc.egui_ctx),
             no_save,
             screenshot,
             frames: 0,
@@ -592,10 +601,18 @@ impl eframe::App for ScannerApp {
             }
         }
 
+        theme::sync(ctx);
         let settings_before = self.config.settings.clone();
+        let theme_before = self.config.theme;
         self.draw(ctx);
         self.dialogs(ctx);
-        if !same_settings(&settings_before, &self.config.settings) {
+        if self.config.theme != theme_before {
+            ctx.set_theme(egui_theme(self.config.theme));
+            ctx.request_repaint();
+        }
+        if !same_settings(&settings_before, &self.config.settings)
+            || self.config.theme != theme_before
+        {
             self.save_config();
         }
 
@@ -630,4 +647,23 @@ fn unix_now() -> u64 {
 fn repaint(ctx: &egui::Context) -> scanner::Notify {
     let ctx = ctx.clone();
     std::sync::Arc::new(move || ctx.request_repaint())
+}
+
+fn egui_theme(t: ThemePref) -> egui::ThemePreference {
+    match t {
+        ThemePref::System => egui::ThemePreference::System,
+        ThemePref::Day => egui::ThemePreference::Light,
+        ThemePref::Night => egui::ThemePreference::Dark,
+    }
+}
+
+/// The app icon as a texture for the sidebar header, scaled down once so it stays sharp.
+fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
+    let img = image::load_from_memory(include_bytes!("../assets/logo-256.png"))
+        .expect("embedded icon is a valid PNG")
+        .resize_exact(64, 64, image::imageops::FilterType::Lanczos3)
+        .into_rgba8();
+    let size = [img.width() as usize, img.height() as usize];
+    let pixels = egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw());
+    ctx.load_texture("logo", pixels, egui::TextureOptions::LINEAR)
 }
