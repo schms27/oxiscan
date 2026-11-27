@@ -198,7 +198,7 @@ pub fn mac_address(ip: Ipv4Addr) -> Option<String> {
 
 pub fn format_mac(b: &[u8]) -> String {
     b.iter()
-        .map(|x| format!("{:02X}", x))
+        .map(|x| format!("{x:02X}"))
         .collect::<Vec<_>>()
         .join(":")
 }
@@ -240,7 +240,8 @@ pub fn netbios_info(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
         pkt.push(b'A');
     }
     pkt.extend_from_slice(&[0, 0, 0x21, 0, 1]);
-    sock.send_to(&pkt, SocketAddr::new(IpAddr::V4(ip), 137)).ok()?;
+    sock.send_to(&pkt, SocketAddr::new(IpAddr::V4(ip), 137))
+        .ok()?;
     let mut buf = [0u8; 1024];
     let (n, _) = sock.recv_from(&mut buf).ok()?;
     let data = &buf[..n];
@@ -256,7 +257,9 @@ pub fn netbios_info(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
         if off + 18 > n {
             break;
         }
-        let name = String::from_utf8_lossy(&data[off..off + 15]).trim().to_string();
+        let name = String::from_utf8_lossy(&data[off..off + 15])
+            .trim()
+            .to_string();
         let suffix = data[off + 15];
         let flags = u16::from_be_bytes([data[off + 16], data[off + 17]]);
         let is_group = flags & 0x8000 != 0;
@@ -273,11 +276,11 @@ pub fn netbios_info(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
     }
     let computer = computer?;
     let mut s = match group {
-        Some(g) => format!("{}\\{}", g, computer),
+        Some(g) => format!("{g}\\{computer}"),
         None => computer,
     };
     if let Some(u) = user {
-        s.push_str(&format!(" [{}]", u));
+        s.push_str(&format!(" [{u}]"));
     }
     Some(s)
 }
@@ -288,9 +291,10 @@ pub fn netbios_info(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
 pub fn web_detect(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
     let addr = SocketAddr::new(IpAddr::V4(ip), 80);
     let mut s = TcpStream::connect_timeout(&addr, timeout).ok()?;
-    s.set_read_timeout(Some(timeout.max(Duration::from_millis(800)))).ok()?;
+    s.set_read_timeout(Some(timeout.max(Duration::from_millis(800))))
+        .ok()?;
     s.set_write_timeout(Some(timeout)).ok()?;
-    let req = format!("HEAD / HTTP/1.0\r\nHost: {}\r\nUser-Agent: NetScanner\r\n\r\n", ip);
+    let req = format!("HEAD / HTTP/1.0\r\nHost: {ip}\r\nUser-Agent: NetScanner\r\n\r\n");
     s.write_all(req.as_bytes()).ok()?;
     let mut buf = vec![0u8; 4096];
     let mut total = 0;
@@ -311,7 +315,10 @@ pub fn web_detect(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
         return None;
     }
     for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("Server:").or_else(|| line.strip_prefix("server:")) {
+        if let Some(rest) = line
+            .strip_prefix("Server:")
+            .or_else(|| line.strip_prefix("server:"))
+        {
             return Some(rest.trim().to_string());
         }
     }

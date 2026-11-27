@@ -103,10 +103,11 @@ impl ScannerApp {
             }
         }
         if feeder.kind != FeederKind::Range {
-            cc.egui_ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-                "{} - OxiScan",
-                feeder.kind.label()
-            )));
+            cc.egui_ctx
+                .send_viewport_cmd(egui::ViewportCommand::Title(format!(
+                    "{} - OxiScan",
+                    feeder.kind.label()
+                )));
         }
         let prefs_draft = config.settings.clone();
         ScannerApp {
@@ -190,9 +191,16 @@ impl ScannerApp {
                 let (ra, rb) = (&res[*a], &res[*b]);
                 let o = match col {
                     0 => u32::from(ra.ip).cmp(&u32::from(rb.ip)),
-                    1 => ra.ping_ms.unwrap_or(u32::MAX).cmp(&rb.ping_ms.unwrap_or(u32::MAX)),
+                    1 => ra
+                        .ping_ms
+                        .unwrap_or(u32::MAX)
+                        .cmp(&rb.ping_ms.unwrap_or(u32::MAX)),
                     2 => ra.ttl.unwrap_or(0).cmp(&rb.ttl.unwrap_or(0)),
-                    4 => rb.ports.len().cmp(&ra.ports.len()).then(ra.ports.cmp(&rb.ports)),
+                    4 => rb
+                        .ports
+                        .len()
+                        .cmp(&ra.ports.len())
+                        .then(ra.ports.cmp(&rb.ports)),
                     c => cell(ra, c).to_lowercase().cmp(&cell(rb, c).to_lowercase()),
                 };
                 if asc {
@@ -238,11 +246,10 @@ impl ScannerApp {
                 Ok(Feeder::Range { start, end })
             }
             FeederKind::Random => {
-                let base: Ipv4Addr = f
-                    .random_base
-                    .trim()
-                    .parse()
-                    .map_err(|_| format!("\"{}\" is not a valid base address", f.random_base))?;
+                let base: Ipv4Addr =
+                    f.random_base.trim().parse().map_err(|_| {
+                        format!("\"{}\" is not a valid base address", f.random_base)
+                    })?;
                 let count: u32 = f
                     .random_count
                     .trim()
@@ -286,7 +293,7 @@ impl ScannerApp {
 
     fn do_start(&mut self, ctx: &egui::Context) {
         if let Err(e) = scanner::parse_ports(&self.config.settings.ports) {
-            self.error = Some(format!("Port list: {}", e));
+            self.error = Some(format!("Port list: {e}"));
             return;
         }
         match self.build_feeder() {
@@ -364,7 +371,11 @@ impl ScannerApp {
                 alive: self.results.iter().filter(|r| r.alive).count(),
                 with_ports: self.results.iter().filter(|r| r.has_ports()).count(),
             });
-            self.status = if self.stopping { "Stopped".into() } else { "Ready".into() };
+            self.status = if self.stopping {
+                "Stopped".into()
+            } else {
+                "Ready".into()
+            };
             self.stopping = false;
             if self.config.settings.show_stats && self.screenshot.is_none() {
                 self.show_stats = true;
@@ -435,7 +446,7 @@ impl ScannerApp {
             Action::CopyDetails => self.copy_details(ctx),
             Action::Open(o) => {
                 if let Err(e) = o.run() {
-                    self.error = Some(format!("Could not open: {}", e));
+                    self.error = Some(format!("Could not open: {e}"));
                 }
             }
         }
@@ -509,7 +520,10 @@ impl ScannerApp {
 
     fn export(&mut self, only_selected: bool) {
         let rows: Vec<&ScanResult> = if only_selected {
-            self.selected_sorted().iter().map(|i| &self.results[*i]).collect()
+            self.selected_sorted()
+                .iter()
+                .map(|i| &self.results[*i])
+                .collect()
         } else {
             self.view.iter().map(|i| &self.results[*i]).collect()
         };
@@ -518,7 +532,11 @@ impl ScannerApp {
             return;
         }
         let Some(path) = rfd::FileDialog::new()
-            .set_title(if only_selected { "Export selection" } else { "Export all" })
+            .set_title(if only_selected {
+                "Export selection"
+            } else {
+                "Export all"
+            })
             .add_filter("Text file", &["txt"])
             .add_filter("CSV file", &["csv"])
             .add_filter("XML file", &["xml"])
@@ -536,8 +554,8 @@ impl ScannerApp {
         );
         let count = rows.len();
         match std::fs::write(&path, text) {
-            Ok(_) => self.status = format!("Exported {} rows", count),
-            Err(e) => self.error = Some(format!("Could not save the file: {}", e)),
+            Ok(_) => self.status = format!("Exported {count} rows"),
+            Err(e) => self.error = Some(format!("Could not save the file: {e}")),
         }
     }
 
@@ -555,7 +573,7 @@ impl ScannerApp {
                     self.feeder.list_path = p.display().to_string();
                     self.status = format!("{} addresses loaded", self.list_ips.len());
                 }
-                Err(e) => self.error = Some(format!("Cannot read the file: {}", e)),
+                Err(e) => self.error = Some(format!("Cannot read the file: {e}")),
             }
         }
     }
@@ -569,7 +587,11 @@ impl ScannerApp {
             .ok()
             .or_else(net::local_ipv4);
         if let Some(ip) = base {
-            let mask: u32 = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix as u32) };
+            let mask: u32 = if prefix == 0 {
+                0
+            } else {
+                u32::MAX << (32 - prefix as u32)
+            };
             let v = u32::from(ip);
             self.feeder.start = Ipv4Addr::from(v & mask).to_string();
             self.feeder.end = Ipv4Addr::from(v | !mask).to_string();
@@ -593,7 +615,7 @@ impl ScannerApp {
                     }
                 }
             }
-            None => self.error = Some(format!("Could not resolve \"{}\"", name)),
+            None => self.error = Some(format!("Could not resolve \"{name}\"")),
         }
     }
 
@@ -618,7 +640,9 @@ impl ScannerApp {
     }
 
     fn handle_screenshot(&mut self, ctx: &egui::Context) {
-        let Some(path) = self.screenshot.clone() else { return };
+        let Some(path) = self.screenshot.clone() else {
+            return;
+        };
         self.frames += 1;
         ctx.request_repaint();
         let mut image = None;
@@ -640,8 +664,10 @@ impl ScannerApp {
                     let _ = std::fs::create_dir_all(dir);
                 }
             }
-            if let Err(e) = image::save_buffer(&path, &buf, w as u32, h as u32, image::ColorType::Rgba8) {
-                eprintln!("Could not save screenshot: {}", e);
+            if let Err(e) =
+                image::save_buffer(&path, &buf, w as u32, h as u32, image::ColorType::Rgba8)
+            {
+                eprintln!("Could not save screenshot: {e}");
             }
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
@@ -669,7 +695,10 @@ impl eframe::App for ScannerApp {
             self.menu_bar(ui, ctx);
         });
         egui::TopBottomPanel::top("toolbar")
-            .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(egui::Margin::symmetric(8, 2)))
+            .frame(
+                egui::Frame::side_top_panel(&ctx.style())
+                    .inner_margin(egui::Margin::symmetric(8, 2)),
+            )
             .show(ctx, |ui| {
                 self.toolbar(ui, ctx);
             });

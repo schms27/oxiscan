@@ -21,7 +21,9 @@ impl ScannerApp {
     }
 
     fn problem_dialog(&mut self, ctx: &egui::Context) {
-        let Some(msg) = self.error.clone() else { return };
+        let Some(msg) = self.error.clone() else {
+            return;
+        };
         let mut close = false;
         egui::Window::new("Problem")
             .collapsible(false)
@@ -91,53 +93,86 @@ impl ScannerApp {
                 ui.separator();
                 match *tab {
                     0 => {
-                        egui::Grid::new("prefs_scan").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
-                            ui.label("Max. threads:");
-                            ui.add(egui::DragValue::new(&mut d.max_threads).range(1..=1000));
-                            ui.end_row();
-                            ui.label("Delay between starting threads (ms):");
-                            ui.add(egui::DragValue::new(&mut d.thread_delay_ms).range(0..=5000));
-                            ui.end_row();
-                            ui.label("Pinging method:");
-                            egui::ComboBox::from_id_salt("ping_method")
-                                .selected_text(d.ping_method.label())
-                                .show_ui(ui, |ui| {
-                                    for m in [PingMethod::Icmp, PingMethod::Tcp, PingMethod::Combined] {
-                                        ui.selectable_value(&mut d.ping_method, m, m.label());
-                                    }
-                                });
-                            ui.end_row();
-                            ui.label("Number of ping probes:");
-                            ui.add(egui::DragValue::new(&mut d.ping_count).range(1..=10));
-                            ui.end_row();
-                            ui.label("Ping timeout (ms):");
-                            ui.add(egui::DragValue::new(&mut d.ping_timeout_ms).range(50..=30000));
-                            ui.end_row();
-                        });
+                        egui::Grid::new("prefs_scan")
+                            .num_columns(2)
+                            .spacing([12.0, 6.0])
+                            .show(ui, |ui| {
+                                ui.label("Max. threads:");
+                                ui.add(egui::DragValue::new(&mut d.max_threads).range(1..=1000));
+                                ui.end_row();
+                                ui.label("Delay between starting threads (ms):");
+                                ui.add(
+                                    egui::DragValue::new(&mut d.thread_delay_ms).range(0..=5000),
+                                );
+                                ui.end_row();
+                                ui.label("Pinging method:");
+                                egui::ComboBox::from_id_salt("ping_method")
+                                    .selected_text(d.ping_method.label())
+                                    .show_ui(ui, |ui| {
+                                        for m in [
+                                            PingMethod::Icmp,
+                                            PingMethod::Tcp,
+                                            PingMethod::Combined,
+                                        ] {
+                                            ui.selectable_value(&mut d.ping_method, m, m.label());
+                                        }
+                                    });
+                                ui.end_row();
+                                ui.label("Number of ping probes:");
+                                ui.add(egui::DragValue::new(&mut d.ping_count).range(1..=10));
+                                ui.end_row();
+                                ui.label("Ping timeout (ms):");
+                                ui.add(
+                                    egui::DragValue::new(&mut d.ping_timeout_ms).range(50..=30000),
+                                );
+                                ui.end_row();
+                            });
                         ui.add_space(4.0);
-                        ui.checkbox(&mut d.scan_dead_hosts, "Scan dead hosts, which don't reply to pings");
-                        ui.checkbox(&mut d.skip_broadcast, "Skip likely broadcast addresses (.0 and .255)");
+                        ui.checkbox(
+                            &mut d.scan_dead_hosts,
+                            "Scan dead hosts, which don't reply to pings",
+                        );
+                        ui.checkbox(
+                            &mut d.skip_broadcast,
+                            "Skip likely broadcast addresses (.0 and .255)",
+                        );
                     }
                     1 => {
                         ui.label("Ports to scan (e.g. 1-1024,3389,8080):");
-                        ui.add(egui::TextEdit::multiline(&mut d.ports).desired_rows(2).desired_width(380.0));
+                        ui.add(
+                            egui::TextEdit::multiline(&mut d.ports)
+                                .desired_rows(2)
+                                .desired_width(380.0),
+                        );
                         match scanner::parse_ports(&d.ports) {
                             Ok(v) => ui.label(
-                                RichText::new(format!("{} ports", v.len())).color(Color32::from_gray(110)),
+                                RichText::new(format!("{} ports", v.len()))
+                                    .color(Color32::from_gray(110)),
                             ),
                             Err(e) => ui.label(RichText::new(e).color(COLOR_DEAD)),
                         };
                         ui.add_space(4.0);
-                        egui::Grid::new("prefs_ports").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
-                            ui.label("Port connect timeout (ms):");
-                            ui.add(egui::DragValue::new(&mut d.port_timeout_ms).range(50..=30000));
-                            ui.end_row();
-                        });
-                        ui.checkbox(&mut d.adapt_port_timeout, "Adapt timeout to the host's ping time");
+                        egui::Grid::new("prefs_ports")
+                            .num_columns(2)
+                            .spacing([12.0, 6.0])
+                            .show(ui, |ui| {
+                                ui.label("Port connect timeout (ms):");
+                                ui.add(
+                                    egui::DragValue::new(&mut d.port_timeout_ms).range(50..=30000),
+                                );
+                                ui.end_row();
+                            });
+                        ui.checkbox(
+                            &mut d.adapt_port_timeout,
+                            "Adapt timeout to the host's ping time",
+                        );
                     }
                     _ => {
                         ui.checkbox(&mut d.show_stats, "Show statistics when a scan finishes");
-                        ui.checkbox(&mut d.ask_confirm_new_scan, "Ask before clearing results for a new scan");
+                        ui.checkbox(
+                            &mut d.ask_confirm_new_scan,
+                            "Ask before clearing results for a new scan",
+                        );
                     }
                 }
                 ui.separator();
@@ -152,7 +187,7 @@ impl ScannerApp {
             });
         if apply {
             if let Err(e) = scanner::parse_ports(&self.prefs_draft.ports) {
-                self.error = Some(format!("Port list: {}", e));
+                self.error = Some(format!("Port list: {e}"));
             } else {
                 self.config.settings = self.prefs_draft.clone();
                 self.save_config();
@@ -177,15 +212,23 @@ impl ScannerApp {
             .show(ctx, |ui| {
                 ui.label("Choose what to find out about each host:");
                 ui.add_space(4.0);
-                ui.add_enabled(false, egui::Checkbox::new(&mut true, "IP and Ping (always)"));
-                ui.add_enabled(false, egui::Checkbox::new(&mut true, "Ports (set the list in Preferences)"));
+                ui.add_enabled(
+                    false,
+                    egui::Checkbox::new(&mut true, "IP and Ping (always)"),
+                );
+                ui.add_enabled(
+                    false,
+                    egui::Checkbox::new(&mut true, "Ports (set the list in Preferences)"),
+                );
                 ui.checkbox(&mut s.fetch_hostname, "Hostname");
                 ui.checkbox(&mut s.fetch_ttl, "TTL");
                 ui.checkbox(&mut s.fetch_mac, "MAC Address (local network only)");
                 ui.checkbox(&mut s.fetch_netbios, "NetBIOS Info");
                 ui.checkbox(&mut s.fetch_web, "Web detect (server on port 80)");
                 ui.add_space(4.0);
-                ui.label(RichText::new("Changes apply to the next scan.").color(Color32::from_gray(110)));
+                ui.label(
+                    RichText::new("Changes apply to the next scan.").color(Color32::from_gray(110)),
+                );
             });
         if before != format!("{:?}", self.config.settings) {
             self.save_config();
@@ -206,22 +249,29 @@ impl ScannerApp {
                 .collapsible(false)
                 .resizable(false)
                 .show(ctx, |ui| {
-                    egui::Grid::new("stats").num_columns(2).spacing([16.0, 4.0]).show(ui, |ui| {
-                        let avg = if s.scanned > 0 { s.seconds / s.scanned as f64 } else { 0.0 };
-                        let rows = [
-                            ("Total time:", format!("{:.2} sec", s.seconds)),
-                            ("Average time per host:", format!("{:.3} sec", avg)),
-                            ("Scanned:", s.description.clone()),
-                            ("Hosts scanned:", s.scanned.to_string()),
-                            ("Hosts alive:", s.alive.to_string()),
-                            ("With open ports:", s.with_ports.to_string()),
-                        ];
-                        for (k, v) in rows {
-                            ui.label(k);
-                            ui.label(v);
-                            ui.end_row();
-                        }
-                    });
+                    egui::Grid::new("stats")
+                        .num_columns(2)
+                        .spacing([16.0, 4.0])
+                        .show(ui, |ui| {
+                            let avg = if s.scanned > 0 {
+                                s.seconds / s.scanned as f64
+                            } else {
+                                0.0
+                            };
+                            let rows = [
+                                ("Total time:", format!("{:.2} sec", s.seconds)),
+                                ("Average time per host:", format!("{avg:.3} sec")),
+                                ("Scanned:", s.description.clone()),
+                                ("Hosts scanned:", s.scanned.to_string()),
+                                ("Hosts alive:", s.alive.to_string()),
+                                ("With open ports:", s.with_ports.to_string()),
+                            ];
+                            for (k, v) in rows {
+                                ui.label(k);
+                                ui.label(v);
+                                ui.end_row();
+                            }
+                        });
                 });
         }
         if !open || self.stats.is_none() {
@@ -246,22 +296,25 @@ impl ScannerApp {
             .show(ctx, |ui| {
                 ui.label(RichText::new(r.ip.to_string()).strong().size(16.0));
                 ui.separator();
-                egui::Grid::new("details_grid").num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {
-                    ui.label("Status:");
-                    ui.label(if r.has_ports() {
-                        "Alive, with open ports"
-                    } else if r.alive {
-                        "Alive"
-                    } else {
-                        "Dead (no reply)"
-                    });
-                    ui.end_row();
-                    for (c, name) in COLUMNS.iter().enumerate().skip(1) {
-                        ui.label(format!("{}:", name));
-                        ui.add(egui::Label::new(cell(r, c)).wrap());
+                egui::Grid::new("details_grid")
+                    .num_columns(2)
+                    .spacing([14.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label("Status:");
+                        ui.label(if r.has_ports() {
+                            "Alive, with open ports"
+                        } else if r.alive {
+                            "Alive"
+                        } else {
+                            "Dead (no reply)"
+                        });
                         ui.end_row();
-                    }
-                });
+                        for (c, name) in COLUMNS.iter().enumerate().skip(1) {
+                            ui.label(format!("{name}:"));
+                            ui.add(egui::Label::new(cell(r, c)).wrap());
+                            ui.end_row();
+                        }
+                    });
                 ui.add_space(6.0);
                 if ui.button("Copy to clipboard").clicked() {
                     ctx.copy_text(text.clone());
@@ -284,7 +337,8 @@ impl ScannerApp {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let r = ui.add(egui::TextEdit::singleline(&mut self.find_text).desired_width(200.0));
+                    let r = ui
+                        .add(egui::TextEdit::singleline(&mut self.find_text).desired_width(200.0));
                     if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                         go = true;
                         r.request_focus();

@@ -11,17 +11,17 @@ pub enum Opener {
 
 pub fn ping_cmd(ip: Ipv4Addr) -> String {
     if cfg!(windows) {
-        format!("ping -t {}", ip)
+        format!("ping -t {ip}")
     } else {
-        format!("ping {}", ip)
+        format!("ping {ip}")
     }
 }
 
 pub fn trace_cmd(ip: Ipv4Addr) -> String {
     if cfg!(windows) {
-        format!("tracert {}", ip)
+        format!("tracert {ip}")
     } else {
-        format!("traceroute {}", ip)
+        format!("traceroute {ip}")
     }
 }
 
@@ -45,29 +45,48 @@ impl Opener {
                     .spawn()
                     .map(|_| ()),
                 Opener::Shares(ip) => Command::new("explorer")
-                    .arg(format!("\\\\{}", ip))
+                    .arg(format!("\\\\{ip}"))
                     .spawn()
                     .map(|_| ()),
-                Opener::Rdp(ip) => Command::new("mstsc").arg(format!("/v:{}", ip)).spawn().map(|_| ()),
+                Opener::Rdp(ip) => Command::new("mstsc")
+                    .arg(format!("/v:{ip}"))
+                    .spawn()
+                    .map(|_| ()),
             }
         }
         #[cfg(not(windows))]
         {
-            let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+            let opener = if cfg!(target_os = "macos") {
+                "open"
+            } else {
+                "xdg-open"
+            };
             match self {
                 Opener::Url(u) => Command::new(opener).arg(u).spawn().map(|_| ()),
                 Opener::Terminal(c) => {
                     if cfg!(target_os = "macos") {
                         Command::new("osascript")
-                            .args(["-e", &format!("tell app \"Terminal\" to do script \"{}\"", c)])
+                            .args([
+                                "-e",
+                                &format!("tell app \"Terminal\" to do script \"{}\"", c),
+                            ])
                             .spawn()
                             .map(|_| ())
                     } else {
-                        Command::new("x-terminal-emulator").args(["-e", c]).spawn().map(|_| ())
+                        Command::new("x-terminal-emulator")
+                            .args(["-e", c])
+                            .spawn()
+                            .map(|_| ())
                     }
                 }
-                Opener::Shares(ip) => Command::new(opener).arg(format!("smb://{}/", ip)).spawn().map(|_| ()),
-                Opener::Rdp(ip) => Command::new(opener).arg(format!("rdp://{}", ip)).spawn().map(|_| ()),
+                Opener::Shares(ip) => Command::new(opener)
+                    .arg(format!("smb://{}/", ip))
+                    .spawn()
+                    .map(|_| ()),
+                Opener::Rdp(ip) => Command::new(opener)
+                    .arg(format!("rdp://{}", ip))
+                    .spawn()
+                    .map(|_| ()),
             }
         }
     }

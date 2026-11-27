@@ -24,27 +24,45 @@ const NETMASKS: [(u8, &str); 9] = [
 fn command_items(ui: &mut egui::Ui, ip: Option<Ipv4Addr>, scanning: bool) -> Option<Action> {
     let has = ip.is_some();
     let mut act = None;
-    if ui.add_enabled(has, egui::Button::new("Show details").shortcut_text("Enter")).clicked() {
+    if ui
+        .add_enabled(
+            has,
+            egui::Button::new("Show details").shortcut_text("Enter"),
+        )
+        .clicked()
+    {
         act = Some(Action::Details);
     }
     ui.separator();
     if ui
-        .add_enabled(has && !scanning, egui::Button::new("Rescan IP(s)").shortcut_text("Ctrl+R"))
+        .add_enabled(
+            has && !scanning,
+            egui::Button::new("Rescan IP(s)").shortcut_text("Ctrl+R"),
+        )
         .clicked()
     {
         act = Some(Action::Rescan);
     }
     if ui
-        .add_enabled(has && !scanning, egui::Button::new("Delete IP(s)").shortcut_text("Del"))
+        .add_enabled(
+            has && !scanning,
+            egui::Button::new("Delete IP(s)").shortcut_text("Del"),
+        )
         .clicked()
     {
         act = Some(Action::Delete);
     }
     ui.separator();
-    if ui.add_enabled(has, egui::Button::new("Copy IP").shortcut_text("Ctrl+C")).clicked() {
+    if ui
+        .add_enabled(has, egui::Button::new("Copy IP").shortcut_text("Ctrl+C"))
+        .clicked()
+    {
         act = Some(Action::CopyIp);
     }
-    if ui.add_enabled(has, egui::Button::new("Copy details")).clicked() {
+    if ui
+        .add_enabled(has, egui::Button::new("Copy details"))
+        .clicked()
+    {
         act = Some(Action::CopyDetails);
     }
     ui.separator();
@@ -52,11 +70,11 @@ fn command_items(ui: &mut egui::Ui, ip: Option<Ipv4Addr>, scanning: bool) -> Opt
         ui.menu_button("Open", |ui| {
             let Some(ip) = ip else { return };
             let items: [(&str, Opener); 7] = [
-                ("Web browser", Opener::Url(format!("http://{}/", ip))),
-                ("Web browser (HTTPS)", Opener::Url(format!("https://{}/", ip))),
+                ("Web browser", Opener::Url(format!("http://{ip}/"))),
+                ("Web browser (HTTPS)", Opener::Url(format!("https://{ip}/"))),
                 ("Ping", Opener::Terminal(ping_cmd(ip))),
                 ("Trace route", Opener::Terminal(trace_cmd(ip))),
-                ("SSH", Opener::Terminal(format!("ssh {}", ip))),
+                ("SSH", Opener::Terminal(format!("ssh {ip}"))),
                 ("Windows shares", Opener::Shares(ip)),
                 ("Remote desktop", Opener::Rdp(ip)),
             ];
@@ -85,11 +103,17 @@ impl ScannerApp {
                     self.choose_list_file();
                 }
                 let export_all = egui::Button::new("Export all...").shortcut_text("Ctrl+S");
-                if ui.add_enabled(!self.results.is_empty(), export_all).clicked() {
+                if ui
+                    .add_enabled(!self.results.is_empty(), export_all)
+                    .clicked()
+                {
                     ui.close();
                     self.export(false);
                 }
-                if ui.add_enabled(has_sel, egui::Button::new("Export selection...")).clicked() {
+                if ui
+                    .add_enabled(has_sel, egui::Button::new("Export selection..."))
+                    .clicked()
+                {
                     ui.close();
                     self.export(true);
                 }
@@ -107,7 +131,10 @@ impl ScannerApp {
                     ("Next dead host", "Ctrl+K", Some(GoTo::Dead)),
                 ];
                 for (label, keys, what) in items {
-                    if ui.add_enabled(any, egui::Button::new(label).shortcut_text(keys)).clicked() {
+                    if ui
+                        .add_enabled(any, egui::Button::new(label).shortcut_text(keys))
+                        .clicked()
+                    {
                         ui.close();
                         if let Some(w) = what {
                             self.go_to(w);
@@ -115,13 +142,20 @@ impl ScannerApp {
                     }
                 }
                 ui.separator();
-                if ui.add_enabled(any, egui::Button::new("Find...").shortcut_text("Ctrl+F")).clicked() {
+                if ui
+                    .add_enabled(any, egui::Button::new("Find...").shortcut_text("Ctrl+F"))
+                    .clicked()
+                {
                     ui.close();
                     self.show_find = true;
                 }
             });
             ui.menu_button("Commands", |ui| {
-                let ip = if has_sel { self.first_selected_ip() } else { None };
+                let ip = if has_sel {
+                    self.first_selected_ip()
+                } else {
+                    None
+                };
                 action = command_items(ui, ip, scanning);
             });
             ui.menu_button("Favorites", |ui| {
@@ -184,7 +218,12 @@ impl ScannerApp {
                     if ui.button("Invert selection").clicked() {
                         ui.close();
                         let old = std::mem::take(&mut self.selected);
-                        self.selected = self.view.iter().copied().filter(|i| !old.contains(i)).collect();
+                        self.selected = self
+                            .view
+                            .iter()
+                            .copied()
+                            .filter(|i| !old.contains(i))
+                            .collect();
                     }
                 });
                 let stats_btn = egui::Button::new("Scan statistics").shortcut_text("Ctrl+T");
@@ -219,15 +258,25 @@ impl ScannerApp {
                 match self.feeder.kind {
                     FeederKind::Range => {
                         ui.add_sized([label_w, 20.0], egui::Label::new("IP Range:"));
-                        ui.add(egui::TextEdit::singleline(&mut self.feeder.start).desired_width(130.0));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.feeder.start).desired_width(130.0),
+                        );
                         ui.label("to");
-                        ui.add(egui::TextEdit::singleline(&mut self.feeder.end).desired_width(130.0));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.feeder.end).desired_width(130.0),
+                        );
                     }
                     FeederKind::Random => {
                         ui.add_sized([label_w, 20.0], egui::Label::new("Base IP:"));
-                        ui.add(egui::TextEdit::singleline(&mut self.feeder.random_base).desired_width(130.0));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.feeder.random_base)
+                                .desired_width(130.0),
+                        );
                         ui.label("Count:");
-                        ui.add(egui::TextEdit::singleline(&mut self.feeder.random_count).desired_width(60.0));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.feeder.random_count)
+                                .desired_width(60.0),
+                        );
                     }
                     FeederKind::List => {
                         ui.add_sized([label_w, 20.0], egui::Label::new("List file:"));
@@ -266,7 +315,9 @@ impl ScannerApp {
         ui.horizontal(|ui| {
             ui.add_enabled_ui(!scanning, |ui| {
                 ui.add_sized([label_w, 20.0], egui::Label::new("Hostname:"));
-                let resp = ui.add(egui::TextEdit::singleline(&mut self.feeder.hostname).desired_width(130.0));
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut self.feeder.hostname).desired_width(130.0),
+                );
                 if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                     self.resolve_hostname();
                 }
@@ -342,7 +393,7 @@ impl ScannerApp {
                     "Stopping...".to_string()
                 } else {
                     match *h.current.lock().unwrap() {
-                        Some(ip) => format!("Scanning: {}", ip),
+                        Some(ip) => format!("Scanning: {ip}"),
                         None => "Starting...".into(),
                     }
                 }
@@ -360,7 +411,11 @@ impl ScannerApp {
             ui.separator();
             let mut display = self.config.display;
             ui.menu_button(format!("Display: {}", display.label()), |ui| {
-                for d in [DisplayFilter::All, DisplayFilter::Alive, DisplayFilter::OpenPorts] {
+                for d in [
+                    DisplayFilter::All,
+                    DisplayFilter::Alive,
+                    DisplayFilter::OpenPorts,
+                ] {
                     if ui.selectable_value(&mut display, d, d.label()).clicked() {
                         ui.close();
                     }
@@ -377,7 +432,10 @@ impl ScannerApp {
                 .as_ref()
                 .map(|h| h.active.load(std::sync::atomic::Ordering::Relaxed))
                 .unwrap_or(0);
-            ui.add_sized([80.0, 18.0], egui::Label::new(format!("Threads: {}", threads)));
+            ui.add_sized(
+                [80.0, 18.0],
+                egui::Label::new(format!("Threads: {threads}")),
+            );
             ui.separator();
             let width = (ui.available_width() - 4.0).max(40.0);
             match &self.scan {
@@ -391,8 +449,10 @@ impl ScannerApp {
                     );
                 }
                 None => {
-                    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 14.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 7.0, ui.visuals().extreme_bg_color);
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(width, 14.0), egui::Sense::hover());
+                    ui.painter()
+                        .rect_filled(rect, 7.0, ui.visuals().extreme_bg_color);
                 }
             }
         });
@@ -476,8 +536,8 @@ impl ScannerApp {
                             } else {
                                 COLOR_DEAD
                             };
-                            let (rect, _) =
-                                ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                            let (rect, _) = ui
+                                .allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                             ui.painter().circle_filled(rect.center(), 5.0, color);
                         }
                         let text = cell(r, *c);
@@ -527,7 +587,10 @@ impl ScannerApp {
         }
         if let Some((i, pos, m)) = clicked {
             if m.shift {
-                if let Some(a) = self.anchor.and_then(|a| self.view.iter().position(|x| *x == a)) {
+                if let Some(a) = self
+                    .anchor
+                    .and_then(|a| self.view.iter().position(|x| *x == a))
+                {
                     let (lo, hi) = if a <= pos { (a, pos) } else { (pos, a) };
                     if !m.command {
                         self.selected.clear();
@@ -604,7 +667,9 @@ impl ScannerApp {
         let up = pressed(KeyboardShortcut::new(Modifiers::NONE, Key::ArrowUp));
         let down = pressed(KeyboardShortcut::new(Modifiers::NONE, Key::ArrowDown));
         if (up || down) && !self.view.is_empty() {
-            let cur = self.anchor.and_then(|a| self.view.iter().position(|x| *x == a));
+            let cur = self
+                .anchor
+                .and_then(|a| self.view.iter().position(|x| *x == a));
             let pos = match (cur, down) {
                 (None, _) => 0,
                 (Some(p), true) => (p + 1).min(self.view.len() - 1),

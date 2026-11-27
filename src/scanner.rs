@@ -80,14 +80,14 @@ pub fn parse_ports(spec: &str) -> Result<Vec<u16>, String> {
             continue;
         }
         if let Some((a, b)) = part.split_once('-') {
-            let a: u16 = a.trim().parse().map_err(|_| format!("Bad port: {}", part))?;
-            let b: u16 = b.trim().parse().map_err(|_| format!("Bad port: {}", part))?;
+            let a: u16 = a.trim().parse().map_err(|_| format!("Bad port: {part}"))?;
+            let b: u16 = b.trim().parse().map_err(|_| format!("Bad port: {part}"))?;
             if a == 0 || a > b {
-                return Err(format!("Bad port range: {}", part));
+                return Err(format!("Bad port range: {part}"));
             }
             v.extend(a..=b);
         } else {
-            let p: u16 = part.parse().map_err(|_| format!("Bad port: {}", part))?;
+            let p: u16 = part.parse().map_err(|_| format!("Bad port: {part}"))?;
             if p == 0 {
                 return Err("Port 0 is not valid".into());
             }
@@ -113,7 +113,7 @@ pub fn format_ports(ports: &[u16]) -> String {
         if start == end {
             out.push(start.to_string());
         } else {
-            out.push(format!("{}-{}", start, end));
+            out.push(format!("{start}-{end}"));
         }
         i += 1;
     }
@@ -124,8 +124,15 @@ pub fn format_ports(ports: &[u16]) -> String {
 
 #[derive(Clone, Debug)]
 pub enum Feeder {
-    Range { start: Ipv4Addr, end: Ipv4Addr },
-    Random { base: Ipv4Addr, prefix: u8, count: u32 },
+    Range {
+        start: Ipv4Addr,
+        end: Ipv4Addr,
+    },
+    Random {
+        base: Ipv4Addr,
+        prefix: u8,
+        count: u32,
+    },
     List(Vec<Ipv4Addr>),
 }
 
@@ -140,9 +147,13 @@ impl Feeder {
 
     pub fn describe(&self) -> String {
         match self {
-            Feeder::Range { start, end } => format!("{} - {}", start, end),
-            Feeder::Random { base, prefix, count } => {
-                format!("{} random in {}/{}", count, base, prefix)
+            Feeder::Range { start, end } => format!("{start} - {end}"),
+            Feeder::Random {
+                base,
+                prefix,
+                count,
+            } => {
+                format!("{count} random in {base}/{prefix}")
             }
             Feeder::List(v) => format!("{} addresses from list", v.len()),
         }
@@ -153,8 +164,16 @@ impl Feeder {
             Feeder::Range { start, end } => {
                 Box::new((u32::from(start)..=u32::from(end)).map(Ipv4Addr::from))
             }
-            Feeder::Random { base, prefix, count } => {
-                let mask: u32 = if prefix == 0 { 0 } else { u32::MAX << (32 - prefix as u32) };
+            Feeder::Random {
+                base,
+                prefix,
+                count,
+            } => {
+                let mask: u32 = if prefix == 0 {
+                    0
+                } else {
+                    u32::MAX << (32 - prefix as u32)
+                };
                 let net = u32::from(base) & mask;
                 let mut seed = Instant::now().elapsed().as_nanos() as u64
                     ^ std::time::SystemTime::now()
@@ -438,6 +457,17 @@ fn scan_ports(ip: Ipv4Addr, ports: &[u16], timeout: Duration, stop: &AtomicBool)
     v
 }
 
+/// Re-scans a list of single hosts (used by "Rescan selected").
+pub fn start_rescan(
+    ips: Vec<Ipv4Addr>,
+    settings: Settings,
+    ctx: eframe::egui::Context,
+) -> ScanHandle {
+    let mut s = settings;
+    s.skip_broadcast = false;
+    start_scan(Feeder::List(ips), s, ctx)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,7 +490,11 @@ mod tests {
         assert_eq!(f.total(), 9);
         let ips: Vec<_> = f.into_iter().collect();
         assert_eq!(ips.last().unwrap().to_string(), "10.0.1.2");
-        let r = Feeder::Random { base: "192.168.5.7".parse().unwrap(), prefix: 24, count: 50 };
+        let r = Feeder::Random {
+            base: "192.168.5.7".parse().unwrap(),
+            prefix: 24,
+            count: 50,
+        };
         assert!(r.into_iter().all(|ip| ip.octets()[..3] == [192, 168, 5]));
         assert_eq!(parse_ip_list("a 1.2.3.4\nx,5.6.7.8;bad 999.1.1.1").len(), 2);
     }
@@ -471,23 +505,21 @@ mod tests {
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = l.local_addr().unwrap().port();
         let s = Settings {
-            ports: format!("{},1", port),
+            ports: format!("{port},1"),
             ping_count: 1,
             fetch_ttl: true,
             ..Settings::default()
         };
         let ports = parse_ports(&s.ports).unwrap();
-        let r = scan_host("127.0.0.1".parse().unwrap(), &s, &ports, &AtomicBool::new(false));
+        let r = scan_host(
+            "127.0.0.1".parse().unwrap(),
+            &s,
+            &ports,
+            &AtomicBool::new(false),
+        );
         assert!(r.alive, "localhost should answer");
         assert!(r.ping_ms.is_some());
         assert_eq!(r.ports, vec![port]);
-        println!("{:?}", r);
+        println!("{r:?}");
     }
-}
-
-/// Re-scans a list of single hosts (used by "Rescan selected").
-pub fn start_rescan(ips: Vec<Ipv4Addr>, settings: Settings, ctx: eframe::egui::Context) -> ScanHandle {
-    let mut s = settings;
-    s.skip_broadcast = false;
-    start_scan(Feeder::List(ips), s, ctx)
 }

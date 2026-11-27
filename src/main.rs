@@ -24,7 +24,8 @@ fn main() -> eframe::Result<()> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("IP Range - OxiScan")
         .with_inner_size([860.0, 560.0])
-        .with_min_inner_size([560.0, 320.0]);
+        .with_min_inner_size([560.0, 320.0])
+        .with_icon(app_icon());
 
     if screenshot.is_some() {
         viewport = viewport.with_active(false);
@@ -53,4 +54,16 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| Ok(Box::new(app::ScannerApp::new(cc, screenshot)))),
     )
+}
+
+fn app_icon() -> egui::IconData {
+    let img = image::load_from_memory(include_bytes!("../assets/logo-256.png"))
+        .expect("embedded icon is a valid PNG")
+        .into_rgba8();
+    let (width, height) = img.dimensions();
+    egui::IconData {
+        rgba: img.into_raw(),
+        width,
+        height,
+    }
 }

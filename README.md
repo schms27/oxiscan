@@ -1,4 +1,8 @@
+<p align="center"><img src="assets/logo-256.png" width="128" alt="OxiScan logo"></p>
+
 # OxiScan
+
+[![CI](https://github.com/schms27/oxiscan/actions/workflows/ci.yml/badge.svg)](https://github.com/schms27/oxiscan/actions/workflows/ci.yml)
 
 A fast, lightweight network IP scanner written in Rust, with a native GUI built on [egui](https://github.com/emilk/egui). It ships as a single executable, with no Java runtime and no installer.
 
@@ -20,6 +24,12 @@ cargo build --release
 ```
 
 The executable is written to `target/release/oxiscan` (`oxiscan.exe` on Windows).
+
+Prebuilt binaries for Windows, Linux and macOS are attached to each [GitHub release](https://github.com/schms27/oxiscan/releases). To cut a release, push a version tag:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
 
 ## Status
 
