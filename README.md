@@ -17,14 +17,16 @@
 
 OxiScan is written in Rust, with a native GUI built on [egui](https://github.com/emilk/egui). It ships as a single executable, with no external dependencies and no installer.
 
+![OxiScan showing a finished scan of a home network](assets/screenshot.png)
+
 ## Features
 
-- Scan an IP range, random addresses, or a list of addresses read from a file
-- Per host: ping time, host name, and open ports
-- Optional columns: TTL, MAC address, Windows (NetBIOS) name, and web server type
-- Sort, filter, rescan, and export the results
-- Open a host in your browser, in a ping window, or over remote desktop
-- Save favorite ranges
+- Scan a subnet (`192.168.1.0/24`), a range, random addresses or a list read from a file
+- Hosts appear live as they answer, grouped into "with open ports" and "online, no open ports"; hosts that don't answer stay out of the way
+- Per host: ping time, hostname, open ports with service names, and optionally TTL, MAC address, NetBIOS name and web server
+- One click opens a host's web interface, file shares, SSH or Remote Desktop
+- Favorites for the networks you scan often, and a list of recent scans
+- Filter the results, rescan hosts, and export to text, CSV, XML or an IP:Port list
 
 ## Building
 
@@ -35,6 +37,12 @@ cargo build --release
 ```
 
 The executable is written to `target/release/oxiscan` (`oxiscan.exe` on Windows).
+
+To try the interface without scanning a real network, start it with made-up example data:
+
+```sh
+oxiscan --demo            # a finished scan (also: --demo=scanning, --demo=empty, --demo=advanced)
+```
 
 Prebuilt binaries for Windows, Linux and macOS are attached to each [GitHub release](https://github.com/schms27/oxiscan/releases). To cut a release, push a version tag:
 
