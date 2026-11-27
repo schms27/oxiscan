@@ -452,7 +452,7 @@ impl ScannerApp {
                     ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                     ui.add_space(4.0);
                     ui.label("A fast network scanner for IP addresses and ports.");
-                    ui.label("Native app written in Rust: no Java needed.");
+                    ui.label("Native app written in Rust: no external dependencies.");
                 });
             if !open {
                 self.show_about = false;

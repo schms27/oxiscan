@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/schms27/oxiscan/actions/workflows/ci.yml/badge.svg)](https://github.com/schms27/oxiscan/actions/workflows/ci.yml)
 
-A fast, lightweight network IP scanner written in Rust, with a native GUI built on [egui](https://github.com/emilk/egui). It ships as a single executable, with no Java runtime and no installer.
+A fast, lightweight network IP scanner written in Rust, with a native GUI built on [egui](https://github.com/emilk/egui). It ships as a single executable, with no external dependencies and no installer.
 
 ## Features
 

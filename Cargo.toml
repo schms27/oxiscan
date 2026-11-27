@@ -2,7 +2,7 @@
 name = "oxiscan"
 version = "0.1.0"
 edition = "2021"
-description = "Fast, Java-free network IP scanner written in Rust"
+description = "Fast, self-contained network IP scanner written in Rust"
 license = "MIT"
 repository = "https://github.com/schms27/oxiscan"
 
