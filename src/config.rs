@@ -1,7 +1,9 @@
 //! Saved preferences and favorites (a small JSON file in the user's settings folder).
 
-use crate::scanner::Settings;
+use crate::net;
+use crate::scanner::{self, Feeder, Settings};
 use serde::{Deserialize, Serialize};
+use std::net::Ipv4Addr;
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -34,6 +36,105 @@ pub struct FeederState {
     pub random_prefix: u8,
     pub random_count: String,
     pub list_path: String,
+}
+
+impl FeederState {
+    /// Turns the target into addresses to scan. `list` caches the addresses of a list
+    /// file; it is filled from `list_path` when empty.
+    pub fn to_feeder(&self, list: &mut Vec<Ipv4Addr>) -> Result<Feeder, String> {
+        match self.kind {
+            FeederKind::Subnet => scanner::parse_target(&self.cidr),
+            FeederKind::Range => {
+                let start: Ipv4Addr = self
+                    .start
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("\"{}\" is not a valid start address", self.start))?;
+                let end: Ipv4Addr = self
+                    .end
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("\"{}\" is not a valid end address", self.end))?;
+                if u32::from(start) > u32::from(end) {
+                    return Err("The start address must not be greater than the end address".into());
+                }
+                Ok(Feeder::Range { start, end })
+            }
+            FeederKind::Random => {
+                let base: Ipv4Addr =
+                    self.random_base.trim().parse().map_err(|_| {
+                        format!("\"{}\" is not a valid base address", self.random_base)
+                    })?;
+                let count: u32 = self
+                    .random_count
+                    .trim()
+                    .parse()
+                    .ok()
+                    .filter(|c| *c > 0)
+                    .ok_or("The number of addresses must be a positive number")?;
+                Ok(Feeder::Random {
+                    base,
+                    prefix: self.random_prefix.min(32),
+                    count,
+                })
+            }
+            FeederKind::List => {
+                if list.is_empty() {
+                    if self.list_path.is_empty() {
+                        return Err("Choose a file with IP addresses first".into());
+                    }
+                    let text = std::fs::read_to_string(&self.list_path)
+                        .map_err(|e| format!("Cannot read {}: {}", self.list_path, e))?;
+                    *list = scanner::parse_ip_list(&text);
+                }
+                if list.is_empty() {
+                    return Err("No IP addresses were found in the file".into());
+                }
+                Ok(Feeder::List(list.clone()))
+            }
+        }
+    }
+}
+
+/// A short description of what a feeder will scan, e.g. "192.168.1.0/24".
+pub fn target_text(f: &FeederState) -> String {
+    match f.kind {
+        FeederKind::Subnet => f.cidr.trim().to_string(),
+        FeederKind::Range => format!("{} – {}", f.start.trim(), f.end.trim()),
+        FeederKind::Random => format!(
+            "{} random in {}/{}",
+            f.random_count.trim(),
+            f.random_base.trim(),
+            f.random_prefix
+        ),
+        FeederKind::List => std::path::Path::new(&f.list_path)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "IP list".into()),
+    }
+}
+
+/// The /24 around this machine's address.
+pub fn local_subnet() -> (Option<Ipv4Addr>, String) {
+    let ip = net::local_ipv4();
+    let o = ip.unwrap_or(Ipv4Addr::new(192, 168, 1, 1)).octets();
+    (ip, format!("{}.{}.{}.0/24", o[0], o[1], o[2]))
+}
+
+pub fn default_feeder() -> FeederState {
+    let ip = net::local_ipv4().unwrap_or(Ipv4Addr::new(192, 168, 1, 1));
+    let o = ip.octets();
+    FeederState {
+        kind: FeederKind::Subnet,
+        cidr: local_subnet().1,
+        start: format!("{}.{}.{}.0", o[0], o[1], o[2]),
+        end: format!("{}.{}.{}.255", o[0], o[1], o[2]),
+        hostname: String::new(),
+        random_base: ip.to_string(),
+        random_prefix: 24,
+        random_count: "100".into(),
+        list_path: String::new(),
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

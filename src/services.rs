@@ -115,10 +115,12 @@ pub enum DeviceKind {
 
 /// Guesses what kind of device a host is from its name and open ports.
 pub fn device_kind(r: &ScanResult, gateway_like: bool) -> DeviceKind {
-    let name = r.hostname.as_deref().unwrap_or("").to_lowercase();
+    // Only the host's own name counts: in "desktop-pc.fritz.box" the domain names the router.
+    let full = r.hostname.as_deref().unwrap_or("").to_lowercase();
+    let name = full.split('.').next().unwrap_or("");
     let has = |p: u16| r.ports.contains(&p);
     let named = |words: &[&str]| words.iter().any(|w| name.contains(w));
-    if named(&["raspberry", "pi.", "rpi"]) {
+    if name == "pi" || named(&["raspberry", "rpi"]) {
         DeviceKind::SingleBoard
     } else if named(&["printer", "print", "epson", "brother", "canon", "hp-"])
         || has(631)
@@ -197,5 +199,32 @@ mod tests {
         assert_eq!(web_url(ip, 8443).as_deref(), Some("https://10.0.0.2:8443/"));
         assert!(port_action(ip, 22).is_some());
         assert!(port_action(ip, 139).is_none());
+    }
+
+    #[test]
+    fn device_kinds_ignore_the_domain() {
+        let host = |name: &str, ports: &[u16]| ScanResult {
+            ip: Ipv4Addr::new(192, 168, 178, 23),
+            alive: true,
+            ping_ms: Some(1),
+            ttl: None,
+            hostname: Some(name.into()),
+            hostname_scanned: true,
+            ports: ports.to_vec(),
+            ports_scanned: true,
+            mac: None,
+            netbios: None,
+            web: None,
+            extra_scanned: true,
+        };
+        let kind = |name, ports| device_kind(&host(name, ports), false);
+        assert_eq!(kind("fritz.box", &[53, 80]), DeviceKind::Router);
+        assert_eq!(
+            kind("DESKTOP-0IDVNLT.fritz.box", &[22, 135, 445]),
+            DeviceKind::Computer
+        );
+        assert_eq!(kind("raspberrypi.lan", &[22]), DeviceKind::SingleBoard);
+        assert_eq!(kind("pi.lan", &[22]), DeviceKind::SingleBoard);
+        assert_eq!(kind("tv.home", &[]), DeviceKind::Tv);
     }
 }
