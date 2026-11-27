@@ -266,10 +266,8 @@ pub fn netbios_info(ip: Ipv4Addr, timeout: Duration) -> Option<String> {
         match (suffix, is_group) {
             (0x00, false) if computer.is_none() => computer = Some(name),
             (0x00, true) if group.is_none() => group = Some(name),
-            (0x03, false) => {
-                if computer.as_deref() != Some(name.as_str()) && user.is_none() {
-                    user = Some(name)
-                }
+            (0x03, false) if computer.as_deref() != Some(name.as_str()) && user.is_none() => {
+                user = Some(name)
             }
             _ => {}
         }
