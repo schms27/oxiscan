@@ -2,18 +2,18 @@
 
 use super::theme::{self as t, regular, semibold};
 use super::{target_text, ScannerApp};
-use crate::config::Favorite;
+use crate::config::{Favorite, ThemePref};
 use eframe::egui::{self, Align2, Key, RichText};
 
 fn dialog(title: &str) -> egui::Window<'_> {
-    egui::Window::new(RichText::new(title).font(semibold(14.0)).color(t::TEXT))
+    egui::Window::new(RichText::new(title).font(semibold(14.0)).color(t::p().text))
         .collapsible(false)
         .resizable(false)
         .anchor(Align2::CENTER_CENTER, [0.0, 0.0])
         .frame(
             egui::Frame::window(&egui::Style::default())
-                .fill(t::BG)
-                .stroke(egui::Stroke::new(1.0_f32, t::BORDER))
+                .fill(t::p().bg)
+                .stroke(egui::Stroke::new(1.0_f32, t::p().border))
                 .corner_radius(10)
                 .inner_margin(16),
         )
@@ -35,7 +35,7 @@ impl ScannerApp {
         let mut close = false;
         dialog("Something went wrong").show(ctx, |ui| {
             ui.set_max_width(360.0);
-            ui.label(RichText::new(msg).color(t::TEXT_2));
+            ui.label(RichText::new(msg).color(t::p().text_2));
             ui.add_space(8.0);
             if ui.button("OK").clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
                 close = true;
@@ -52,7 +52,7 @@ impl ScannerApp {
         }
         let mut answer = None;
         dialog("Start a new scan?").show(ctx, |ui| {
-            ui.label(RichText::new("The current results will be cleared.").color(t::TEXT_2));
+            ui.label(RichText::new("The current results will be cleared.").color(t::p().text_2));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui.button("Start scan").clicked() || ui.input(|i| i.key_pressed(Key::Enter)) {
@@ -82,7 +82,7 @@ impl ScannerApp {
             ui.label(
                 RichText::new(format!("Target: {target}"))
                     .font(regular(12.0))
-                    .color(t::MUTED),
+                    .color(t::p().muted),
             );
             ui.add_space(4.0);
             let edit = ui.add(
@@ -123,12 +123,25 @@ impl ScannerApp {
             return;
         }
         let mut close = false;
+        let theme = &mut self.config.theme;
         let s = &mut self.config.settings;
         dialog("Settings").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Appearance");
+                ui.add_space(8.0);
+                for (value, label) in [
+                    (ThemePref::System, "System default"),
+                    (ThemePref::Day, "Day"),
+                    (ThemePref::Night, "Night"),
+                ] {
+                    ui.selectable_value(theme, value, label);
+                }
+            });
+            ui.add_space(8.0);
             ui.label(
                 RichText::new("Scan options are in the sidebar under Advanced options.")
                     .font(regular(12.0))
-                    .color(t::MUTED),
+                    .color(t::p().muted),
             );
             ui.add_space(8.0);
             egui::Grid::new("settings_grid")
@@ -173,7 +186,7 @@ impl ScannerApp {
                     "4. Right-click hosts to copy, rescan or remove them. Ctrl+F filters the list, Export saves it as text, CSV, XML or an IP:Port list.",
                     "5. Save targets you scan often as favorites. Recent scans are listed at the bottom of the sidebar.",
                 ] {
-                    ui.label(RichText::new(line).color(t::TEXT_2));
+                    ui.label(RichText::new(line).color(t::p().text_2));
                 }
                 ui.add_space(8.0);
                 if ui.button("Close").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
@@ -188,9 +201,14 @@ impl ScannerApp {
         if self.show_about {
             let mut close = false;
             dialog("About OxiScan").show(ctx, |ui| {
-                ui.label(RichText::new("OxiScan").font(semibold(18.0)).color(t::TEXT));
                 ui.label(
-                    RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION"))).color(t::MUTED),
+                    RichText::new("OxiScan")
+                        .font(semibold(18.0))
+                        .color(t::p().text),
+                );
+                ui.label(
+                    RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION")))
+                        .color(t::p().muted),
                 );
                 ui.add_space(6.0);
                 ui.label("A fast network scanner for IP addresses and ports.");
